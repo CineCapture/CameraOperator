@@ -1,0 +1,585 @@
+# ------------------------------------------------------------------------------
+# Global Flight Transition Management (State Machine)
+# ------------------------------------------------------------------------------
+flight_control:
+  # Speed and distance thresholds to dynamically switch between flight modes (Hysteresis)
+  mode_switching:
+    # Maximum drone speed (in m/s) below which it can lock into a stationary orbit
+    # Default: 1.0 | Min: 0.1 | Max: 5.0
+    # * High: Eases quick orbit locking, but risk of a jerky visual transition at high speed.
+    # * Low: Very smooth and peaceful entry into orbit, but requires the drone to be nearly stationary (may delay orbit start).
+    orbit_entry_maximum_drone_speed: 1.0
+
+    # Distance (in meters) the player must walk away to force the drone to abandon orbit and switch to trailing
+    # Default: 5.0 | Min: 2.0 | Max: 15.0
+    # * High: Drone remains orbiting even if the player runs far (player becomes highly off-center on screen).
+    # * Low: Drone immediately abandons orbit as soon as the player takes a step, sticking closely behind.
+    trailing_entry_distance: 5.0
+
+    # Distance (en mètres) sous laquelle le drone décide de se ré-ancrer en orbite si le joueur s'arrête
+    # Default: 4.0 | Min: 1.0 | Max: 12.0
+    # * High: Allows easy return to orbit even if the drone is left slightly behind (quick return to calm state).
+    # * Low: Requires the drone to be very close to the player to re-engage orbit.
+    orbit_return_distance: 4.0
+
+  # Adjusts flight height depending on drone speed
+  clearance_speed:
+    # Drone speed (in m/s) above which full trailing terrain clearance applies
+    # Default: 3.0 | Min: 0.5 | Max: 10.0
+    # * High: Drone maintains its low, cinematic profile longer (higher risk of clipping uneven terrain).
+    # * Low: Drone raises to its 2m safety clearance very early even at slow speeds, protecting the camera.
+    full_terrain_clearance_speed: 3.0
+
+  # Squared target speed needed to update the remembered travel direction.
+  # Default: 0.04 (equivalent to 0.2 m/s). Lower values track smaller movements.
+  meaningful_target_velocity_squared: 0.04
+
+# ------------------------------------------------------------------------------
+# Autonomous Flight Modes
+# ------------------------------------------------------------------------------
+flight_modes:
+  # Configuration for Active Trailing Flight mode
+  trailing_flight:
+    # Physical distances and backup blending relative to the player
+    distances:
+      # Minimum horizontal trailing distance (in meters) behind the player
+      # Default: 2.0 | Min: 0.5 | Max: 10.0
+      # * High: Drone stays far behind even when completely stopped (wide field of view).
+      # * Low: Very tight framing on the player when stopped (increased risk of collision with the character).
+      minimum: 2.0
+
+      # Maximum nominal horizontal trailing distance (in meters) behind the target
+      # Default: 6.0 | Min: 3.0 | Max: 20.0
+      # * High: The preferred trailing point can sit farther back.
+      # * Low: The preferred trailing point stays closer.
+      # Extra high-altitude distance below is added to this nominal distance.
+      maximum: 6.0
+
+      # Extra trailing distance (in meters) injected when the drone gains altitude
+      # Default: 7.0 | Min: 0.0 | Max: 25.0
+      # * High: Huge horizontal retreat at high altitudes (gorgeous cinematic overlook effect).
+      # * Low: Drone climbs vertically without backing away (steep plunging angle, almost zénithal).
+      high_altitude_extra: 7.0
+
+      # Altitude threshold (in meters) where high-altitude extra trailing distance starts blending in
+      # Default: 2.0 | Min: 0.0 | Max: 10.0
+      # * High: High-altitude retreat only activates once the drone is already quite high.
+      # * Low: Drone backs away at the slightest elevation or slope change.
+      blend_start: 2.0
+
+      # Altitude threshold (in meters) where the high-altitude extra trailing distance reaches its maximum
+      # Default: 8.0 | Min: 3.0 | Max: 30.0
+      # * High: Very gradual trailing retreat spread over a large altitude difference.
+      # * Low: Maximum retreat is reached abruptly at the beginning of the climb.
+      blend_end: 8.0
+
+    # Caps trailing height according to horizontal distance from the target.
+    # The host-provided pilot-profile height cap is applied afterward.
+    altitude_limit_by_distance:
+      # Default: 2.0 m. Height cap at or inside the near distance.
+      near_maximum_height: 2.0
+      # Default: 8.0 m. Height cap at or beyond the far distance.
+      far_maximum_height: 8.0
+      # Default: 2.0 m. Horizontal distance where height blending starts.
+      near_distance: 2.0
+      # Default: 10.0 m. Horizontal distance where height blending ends.
+      far_distance: 10.0
+
+    # Slow changes to the nominal trailing distance and lateral position.
+    position_variation:
+      # Default: 0.75. Baseline fraction between minimum and maximum distance.
+      distance_base_fraction: 0.75
+      # Default: 0.25. Size of the sinusoidal distance variation.
+      distance_amplitude_fraction: 0.25
+      # Default: 0.17 rad/s. Angular rate of distance variation.
+      distance_rate: 0.17
+      # Default: 0.75 m. Maximum lateral shift from the trailing line.
+      lateral_amplitude: 0.75
+      # Default: 0.11 rad/s. Angular rate of lateral movement.
+      lateral_rate: 0.11
+
+    # Slow vertical sinusoidal oscillation to mimic a real drone hovering in place
+    # Algo used: Periodic sinusoidal wave + Mathf.SmoothDamp (critically damped spring-damper)
+    altitude_wave:
+      # Enables the autonomous altitude wave; terrain clearance remains active.
+      # Default: true
+      enabled: true
+
+      # Angular rate (in radians/second) of the slow vertical oscillation (autonomous hover breathing)
+      # Default: 0.08 | Min: 0.0 | Max: 0.5
+      # * High: Fast and twitchy vertical oscillation (makes the drone look cheap or unstable).
+      # * Low: Perfect stabilization, no autonomous breathing movement.
+      cycle_rate: 0.08
+
+      # Smoothing time (in seconds) for target altitude transitions
+      # Default: 2.0 | Min: 0.1 | Max: 10.0
+      # * High: Extremely slow vertical damping, completely eliminates ground jaggedness.
+      # * Low: Instant reactivity to target altitude changes (more jittery vertical motion).
+      smooth_time: 2.0
+
+      # Maximum vertical speed (in m/s) allowed for drone altitude adjustments
+      # Default: 0.6 | Min: 0.1 | Max: 5.0
+      # * High: Ultra-fast climbing and falling (excellent for rugged, mountainous terrain).
+      # * Low: Very smooth and slow vertical motion (risk of colliding with ground on steep slopes).
+      max_change_speed: 0.6
+
+      # Maximum amplitude (in meters) of the drone's autonomous vertical breathing wave
+      # Default: 1.0 | Min: 0.0 | Max: 5.0
+      # * High: Ample vertical breathing (creates a very organic airborne feel).
+      # * Low: Hovering is rigid and locked to a strict vertical height.
+      preferred_variation: 1.0
+
+    # Dynamic catch-up and braking based on player's acceleration
+    catch_up:
+      # Maximum extra catch-up speed (in m/s) granted when the drone falls behind
+      # Default: 2.0 | Min: 0.0 | Max: 10.0
+      # * High: Drone can close a trailing gap faster.
+      # * Low: Drone has little extra speed to close a trailing gap.
+      max_bonus: 2.0
+
+      # Upper bound on drone speed relative to the host-provided maxSpeed.
+      # Default: 1.5 times maxSpeed
+      # * High: More speed is available to close a large gap.
+      # * Low: The drone cannot exceed the target's reference speed by much.
+      maximum_speed_multiplier: 1.5
+
+      # Default: 0.5 (m/s per meter of position error). Builds catch-up speed.
+      position_error_speed_gain: 0.5
+      # Default: 0.5 m/s. Below this target speed, directional fading is skipped.
+      moving_target_speed_threshold: 0.5
+      # Default: 5.0 m. Catch-up bonus starts fading near this behind distance.
+      behind_bonus_fade_start: 5.0
+      # Default: 10.0 m. Full catch-up bonus returns beyond this distance.
+      behind_bonus_fade_end: 10.0
+
+      # Dynamic acceleration response (gain) to close the gap if the drone is left behind
+      # Default: 3.0 | Min: 0.5 | Max: 10.0
+      # * High: Lightning-fast acceleration to catch up (high reactivity, but risk of sudden speed jumps).
+      # * Low: Majestic and slow acceleration to close the gap (very smooth, but risk of prolonged lag).
+      speed_response: 3.0
+
+      # Dynamic braking response (gain) to prevent overshooting the player on sudden stops
+      # Default: 6.0 | Min: 1.0 | Max: 20.0
+      # * High: Powerful and instant emergency braking on player stops (framing safety, rigid look).
+      # * Low: Smooth and gradual braking (drone gracefully overshoots player by inertia before backing up).
+      brake_response: 6.0
+
+    # Predictive curved route planner
+    # Algo used: Quadratic Bézier curves (smooth curved trajectory generation)
+    planner:
+      # Enables curved route planning; when false, the direct target is used.
+      # Default: true
+      enabled: true
+
+      # Recalculation interval for the lateral avoidance Bézier curve (in seconds)
+      # Default: 0.5 | Min: 0.05 | Max: 2.0
+      # * High: Rare recalculations (saves CPU), but outdated trajectories if player turns sharply.
+      # * Low: Continuous and highly reactive curve recalculation (perfectly adjusted path, more CPU).
+      refresh_interval: 0.5
+
+      # Minimum prediction horizon (in seconds) after speed-based projection
+      # Default: 0.8 | Min: 0.1 | Max: 2.0
+      # * High: Trajectory projected very far even at slow speed (very ample and smooth curve).
+      # * Low: Trajectory projected very short at slow speed (maximum reactivity to micro-movements).
+      minimum_horizon: 0.8
+
+      # Maximum prediction horizon (in seconds) after speed-based projection
+      # Default: 2.5 | Min: 1.0 | Max: 10.0
+      # * High: Far projection at high speeds (very elongated and highly anticipated Bézier curve).
+      # * Low: Short prediction horizon even at high speeds (drone follows closely but anticipates curves poorly).
+      maximum_horizon: 2.5
+
+      # Default: 0.8 s. Base prediction horizon before the speed term is added.
+      base_horizon: 0.8
+      # Default: 0.25 s per m/s. Extends the horizon as speed increases.
+      horizon_speed_gain: 0.25
+      # Default: 0.5. Portion of projected drone momentum used as curve tangent.
+      initial_tangent_momentum_fraction: 0.5
+
+      # Target waypoint position progress along the Bézier curve (ratio 0-1)
+      # Default: 0.4 | Min: 0.1 | Max: 1.0
+      # * High: Aiming point close to the end of the curve (drone tends to cut corners).
+      # * Low: Aiming point close to the start of the curve (drone closely follows the curve's path).
+      waypoint_progress: 0.4
+
+      # Minimum safety distance (in meters) projected behind the player
+      # Default: 3.5 | Min: 1.0 | Max: 10.0
+      # * High: Ensures a large horizontal safety margin behind the player.
+      # * Low: Allows trajectories calculated very close to the player (risk of collision).
+      minimum_predicted_behind_distance: 3.5
+
+      # Number of subdivisions along the Bézier curve for collision test sampling
+      # Default: 8 | Min: 2 | Max: 32
+      # * High: Flawless collision detection along the curve (maximum safety, high CPU cost).
+      # * Low: Coarse sampling by long segments (risk of clipping small obstacles like branches).
+      route_samples: 8
+
+      # Default search order in meters: direct, then progressively left/right.
+      # More candidates cost additional curve collision checks.
+      lateral_offsets: [0.0, -1.0, 1.0, -2.0, 2.0, -3.0, 3.0]
+
+    # Reactive Obstacle and Terrain Avoidance System (Trajectory Planner)
+    # Algos used: Predictive Raycasting (SphereCasts) + asymmetric terrain following
+    avoidance:
+      # Raycasting to predict and bypass physical obstacles (trees, rocks, structures)
+      detection:
+        # Enables reactive obstacle detours; terrain clearance remains active.
+        # Default: true
+        enabled: true
+
+        # Recalculation interval for obstacle avoidance raycasts (in seconds)
+        # Default: 0.1 | Min: 0.02 | Max: 1.0
+        # * High: Fewer avoidance calculations (saves CPU), but delayed bypass reaction.
+        # * Low: Ultra-reactive real-time obstacle avoidance (constant SphereCasts, CPU impact).
+        refresh_interval: 0.1
+
+        # Minimum safety look-ahead distance (in meters) projected in front of the drone
+        # Default: 4.0 | Min: 1.0 | Max: 15.0
+        # * High: Very early detection of obstacles (drone initiates bypass very early and smoothly).
+        # * Low: Delayed reaction (drone bypasses obstacle at the last moment with a sharp turn).
+        minimum_look_ahead: 4.0
+
+        # Anticipation time (in seconds) used to extend detection distance based on current drone speed
+        # Default: 2.0 | Min: 0.5 | Max: 5.0
+        # * High: Greatly increases warning distance at high speeds.
+        # * Low: Avoidance distance has little correlation with drone speed.
+        look_ahead_seconds: 2.0
+
+        # Radius of the drone's virtual sphere (in meters) tested during SphereCasts for physical collisions
+        # Default: 0.4 | Min: 0.05 | Max: 2.0
+        # * High: Immense safety bubble (avoids brushing the smallest leaf, but can lock up in narrow pathways).
+        # * Low: Tight bubble (squeezes through narrow gaps, but risk of visible visual intersections with decor).
+        camera_radius: 0.4
+
+        # Fallback retreat distance (in meters) when an actor blocks the route and no detour is clear
+        # Default: 2.0 | Min: 0.5 | Max: 10.0
+        # * High: Drone retreats farther when no route around an actor is clear.
+        # * Low: Fallback retreat is shorter; this is not a standing safety distance.
+        actor_retreat_distance: 2.0
+
+        # Default: 2.5 m. Nearby obstacles allow emergency steering limits.
+        emergency_distance: 2.5
+        # Default: 0.04 (m/s)^2. Below this squared speed, ignore momentum.
+        momentum_speed_squared: 0.04
+        # Candidate offsets [sideways meters, upward meters], in search order.
+        # Default: test near left/right before wider or higher alternatives.
+        route_offsets:
+          - [-1.0, 0.0]
+          - [1.0, 0.0]
+          - [-1.0, 1.0]
+          - [1.0, 1.0]
+          - [-2.0, 1.0]
+          - [2.0, 1.0]
+          - [-1.0, 2.0]
+          - [1.0, 2.0]
+          - [0.0, 1.0]
+          - [0.0, 2.0]
+        # Default: 2.0 s. Keeps the chosen avoidance side after a clear path.
+        avoidance_side_hold: 2.0
+
+      # Damping and time constants for terrain slope following
+      terrain_following:
+        # Minimum flight height (in meters) above the ground in Trailing flight mode
+        # Default: 2.0 | Min: 0.5 | Max: 10.0
+        # * High: Safe, high survol flight (overall aerial view).
+        # * Low: Extremely low and cinematic rasant flight (risk of clipping rough terrain).
+        minimum_height: 2.0
+
+        # Safety height (ground clearance margin in meters) preserved at slow speeds to avoid rough terrain
+        # Default: 1.5 | Min: 0.5 | Max: 5.0
+        # * High: Comfortable ground clearance ensured even when stopped.
+        # * Low: Drone drops very low to the player's eye level when stopped.
+        slow_clearance: 1.5
+
+        # Damping time constant (in seconds) for fast climbing when facing an obstacle or slope
+        # Default: 0.35 | Min: 0.05 | Max: 2.0
+        # * High: Slow and lazy climb (high risk of hitting a steep hill).
+        # * Low: Instant and vigorous climbing reaction (maximum protection against terrain).
+        rise_smooth_time: 0.35
+
+        # Damping time constant (in seconds) for slow and smooth descent after passing a summit
+        # Default: 1.5 | Min: 0.2 | Max: 5.0
+        # * High: Majestic and damped descent (completely eliminates vertical hover-bobbing/oscillations).
+        # * Low: Drone dives immediately after a summit (unpleasant rollercoaster effect).
+        fall_smooth_time: 1.5
+
+        # Number of ground-height samples along the future trajectory to plan smooth elevation
+        # Default: 8 | Min: 2 | Max: 24
+        # * High: Perfect and anticipated tracking of the smallest bumps in the ground.
+        # * Low: Coarse ground tracking (may react with a delay to a dirt mound).
+        samples: 8
+
+  # Configuration for Cinematic Orbit Flight mode
+  # Main Algo: Linear regression via Ordinary Least Squares (OLS) for terrain slope fitting
+  orbit_flight:
+    # Reactive obstacle avoidance is currently used only in Trailing flight.
+    reactive_obstacle_avoidance:
+      # Enables last-moment detours while orbiting.
+      # Default: false. Planned orbit and terrain clearance remain active.
+      enabled: false
+
+    # Tangential orbit speed control and kinematic prediction
+    speed_control:
+      # Nominal tangential speed of the drone along its orbit (in m/s)
+      # Default: 0.5 | Min: 0.0 | Max: 5.0
+      # * High: Fast orbital rotation (dynamic, sporty, or action effect).
+      # * Low: Very slow, contemplative, and majestic rotation (perfect for large quiet panoramas).
+      speed: 0.5
+
+      # Speed multiplier applied when the drone orbits in front of the player's face (slowdown to polish framing)
+      # Default: 0.5 | Min: 0.1 | Max: 1.0
+      # * High: No slowdown in front of player (risk of missing facial expression framing).
+      # * Low: Strong slowdown in front of face (extremely polished framing, great for portraits).
+      front_speed_multiplier: 0.5
+
+      # Speed multiplier applied when the drone is behind the player's back (transition acceleration)
+      # Default: 1.5 | Min: 1.0 | Max: 5.0
+      # * High: Fierce acceleration behind the back to quickly return to sides/front (dynamic transition effect).
+      # * Low: No acceleration in back (uniform rotation speed throughout the orbit).
+      rear_speed_multiplier: 1.5
+
+      # Default: 1.0 m. Lower bound for radius when converting speed to angle.
+      minimum_angular_radius: 1.0
+
+      # Future look-ahead projection time (in seconds) to anticipate player movement when calculating orbit target
+      # Default: 2.0 | Min: 0.1 | Max: 5.0
+      # * High: Strong anticipation (orbit leads far ahead of the player's future run path).
+      # * Low: Drone orbits around player's near-instantaneous position (more reactive but less anticipated).
+      anticipation_seconds: 2.0
+
+      # Temporal advance (in seconds) passed to the physical solver to fluidifier kinematic convergence
+      # Default: 1.5 | Min: 0.1 | Max: 5.0
+      # * High: Extremely anticipated physical convergence, very smooth trajectory.
+      # * Low: Direct and twitchy convergence towards calculated orbit target.
+      motion_lead_seconds: 1.5
+
+    # Radius and height constraints of the drone during rotation
+    height_constraints:
+      # Minimum allowed orbit radius (in meters) around the player
+      # Default: 2.0 | Min: 1.0 | Max: 10.0
+      # * High: Orbit radius remains large (risk of collision with walls in confined spaces).
+      # * Low: Allows drone to rotate very close to player (ideal for indoor environments).
+      minimum_radius: 2.0
+
+      # Minimum ground height allowed during orbital movements (in meters)
+      # Default: 0.5 | Min: 0.1 | Max: 5.0
+      # * High: Drone flies high even in orbit (safe survol flight).
+      # * Low: Orbit at ground height (nice dramatic effect, but risk of catching ground unevenness).
+      minimum_height: 0.5
+
+      # Critical distance (in meters) where the drone enters a tight and low flight profile around the player
+      # Default: 3.0 | Min: 1.0 | Max: 10.0
+      # * High: Drone starts descending and tightening very far away.
+      # * Low: Drone only drops into low profile if truly stuck to the player.
+      close_distance: 3.0
+
+      # Maximum allowed flight height (in meters) in the tight orbit zone
+      # Default: 2.0 | Min: 0.5 | Max: 10.0
+      # * High: Allows drone to climb high even when very close to player.
+      # * Low: Flattens drone height very low (protects drone against low ceilings and caves).
+      close_maximum_height: 2.0
+
+      # Progressive transition distance (in meters) to apply tight orbit height
+      # Default: 1.0 | Min: 0.1 | Max: 5.0
+      # * High: Smooth and progressive altitude transition during orbit tightening.
+      # * Low: Abrupt vertical transition as soon as critical distance threshold is crossed.
+      close_height_blend_distance: 1.0
+
+    # Smoothing and speed limit of orbit radius adjustment
+    # Algos used: Damping via critically damped spring-damper (Mathf.SmoothDamp) + damped kinematic radial correction
+    radius_adaptation:
+      # Damping (in seconds) of dynamic orbit radius adjustments (prevents lateral jerks)
+      # Default: 3.0 | Min: 0.5 | Max: 10.0
+      # * High: Very smooth and slow expansion or contraction of radius (eliminates lateral jumps).
+      # * Low: Ultra-fast and instant radial adjustment (jittery movement, maximum reactivity).
+      smooth_time: 3.0
+
+      # Maximum allowed radial contraction or expansion speed (in m/s)
+      # Default: 0.5 | Min: 0.1 | Max: 3.0
+      # * High: Ultra-fast radius change (ideal if obstacles approach suddenly).
+      # * Low: Extremely slow radius adjustment (risk of clipping a wall if space shrinks fast).
+      max_speed: 0.5
+
+    # Orbit alignment algorithm via linear regression on terrain slope
+    # Algo used: Ordinary Least Squares (OLS) linear regression optimized by circular symmetry
+    plane_fitting:
+      # Number of ground height points sampled in a circle to construct orbit's incline plane (Least Squares Regression)
+      # Default: 36 | Min: 12 | Max: 72
+      # * High: Slope estimation has absolute stability (impervious to small bumps or rocks).
+      # * Low: Fast plane calculation, but highly sensitive to micro-irregularities (risk of oscillating orbit).
+      terrain_samples: 36
+
+      # Number of candidate radii tested to select the orbit with the fewest blocked segments
+      # Default: 9 | Min: 3 | Max: 20
+      # * High: Evaluates a wide variety of radii to find the perfect orbit (maximum safety against decor).
+      # * Low: Limited choice of candidate rings (faster pre-flight calculation, but final orbit potentially less clear).
+      radius_candidates: 9
+
+# ------------------------------------------------------------------------------
+# Kinematic Solver and Physical Engine (Drone Motion)
+# ------------------------------------------------------------------------------
+# Physical principles: 3rd-order S-curve motion profile (Jerk Limiting / S-Curve) + vertical damping (SmoothDamp)
+kinematics:
+  # Acceleration and jerk ceilings (horizontal and vertical)
+  limits:
+    # Maximum horizontal acceleration (in m/s²) allowed during standard smooth flight
+    # Default: 8.0 | Min: 1.0 | Max: 30.0
+    # * High: Drone accelerates vividly and twitchily (maximum reactivity).
+    # * Low: Heavy and slow acceleration (drone feels very heavy, increases reaction time).
+    maximum_acceleration: 8.0
+
+    # Maximum horizontal jerk (m/s³) - Acceleration rate change limit (determines organic inertia and fluidity)
+    # Default: 30.0 | Min: 5.0 | Max: 120.0
+    # * High: Sharp and mechanical speed changes (rigid/robotic look).
+    # * Low: Extremely smoothed and progressive organic inertia (crane or Steadicam effect).
+    maximum_jerk: 30.0
+
+    # Maximum horizontal emergency acceleration (in m/s²) during sudden collision bypasses
+    # Default: 14.0 | Min: 5.0 | Max: 50.0
+    # * High: Extremely vigorous and fast emergency avoidance to dodge physical obstacles.
+    # * Low: Lazy emergency avoidance (high risk of colliding before having time to brake).
+    emergency_acceleration: 14.0
+
+    # Maximum emergency jerk (m/s³) during critical collision avoidance
+    # Default: 60.0 | Min: 10.0 | Max: 250.0
+    # * High: Sharp and instant emergency direction changes to flee danger.
+    # * Low: Smooth and damped emergency direction changes (may lack reactivity against fine obstacles).
+    emergency_jerk: 60.0
+
+    # Maximum allowed vertical acceleration (in m/s²)
+    # Default: 2.5 | Min: 0.5 | Max: 10.0
+    # * High: Instant and energetic compensation of ground elevation or slope changes.
+    # * Low: Very smooth vertical climbing/falling (risk of hitting ground during sudden slope changes).
+    maximum_vertical_acceleration: 2.5
+
+  # Kinematic damping time constants (convergence gains)
+  response_times:
+    # Velocity solver response time (in seconds) to reach target nominal kinematic velocity
+    # Default: 0.25 | Min: 0.05 | Max: 2.0
+    # * High: Significant lag and "trailing effect" relative to target speed (lazy movement).
+    # * Low: Drone reaches target speed almost instantaneously (very direct movement).
+    velocity_response_time: 0.25
+
+    # Emergency avoidance response time (in seconds) when facing imminent obstacle
+    # Default: 0.1 | Min: 0.02 | Max: 1.0
+    # * High: Delay in triggering backup escape trajectory (collision danger).
+    # * Low: Immediate emergency pivot as soon as an obstacle cuts the alert zone.
+    emergency_response_time: 0.1
+
+    # Damping time (in seconds) to smooth vertical position adjustment transitions
+    # Default: 0.9 | Min: 0.1 | Max: 5.0
+    # * High: Extremely long and soft altitude damping (majestic gliding flight).
+    # * Low: Sharp altitude adjustments without inertia (maximum reactivity to ground bumps).
+    vertical_smooth_time: 0.9
+
+    # Estimated time (in seconds) to converge horizontally to target destination waypoint
+    # Default: 1.0 | Min: 0.1 | Max: 5.0
+    # * High: Very smooth and progressive convergence towards target (perfect for cinema).
+    # * Low: Drone charges in straight line and stops dead on target.
+    horizontal_arrival_time: 1.0
+
+  # Vertical climbing and falling speeds
+  vertical_speeds:
+    # Standard vertical speed (in m/s) in normal cruise flight
+    # Default: 0.6 | Min: 0.1 | Max: 5.0
+    # * High: Drone climbs or descends very quickly during cruise.
+    # * Low: Quiet and discrete height adjustments.
+    cruise_vertical_speed: 0.6
+
+    # Maximum vertical speed (in m/s) during fast catch-up of player
+    # Default: 2.5 | Min: 0.5 | Max: 8.0
+    # * High: Lightning-fast climb or dive when drone is left behind (priority catch-up).
+    # * Low: No vertical speed bonus, slow height catch-up (risk of staying under ground briefly).
+    catch_up_vertical_speed: 2.5
+
+    # Height-error range that blends cruise speed into catch-up speed.
+    # Default: 2.0 m. Below this error, use cruise vertical speed.
+    catch_up_error_start: 2.0
+    # Default: 10.0 m. Beyond this error, allow full catch-up vertical speed.
+    catch_up_error_end: 10.0
+
+  # Dead zone and damping to correct orbital kinematic drift
+  radial_correction:
+    # Radial dead zone (in meters) allowed in orbit without forcing kinematic correction
+    # Default: 0.2 | Min: 0.0 | Max: 1.0
+    # * High: Drone tolerates significant drift relative to ideal radius (imperfect elliptical movement).
+    # * Low: Drone strictly follows a mathematically perfect circle with no tolerance.
+    dead_zone: 0.2
+
+    # Damping time (in seconds) to smoothly correct radial drift in orbit
+    # Default: 2.5 | Min: 0.5 | Max: 10.0
+    # * High: Very slow, progressive, and discrete return to ideal radius (no framing jerks).
+    # * Low: Abrupt and immediate radial correction (risk of visible sharp lateral movements).
+    correction_time: 2.5
+
+    # Maximum radial speed (in m/s) allowed to center drone back on orbit with no sudden movements
+    # Default: 0.15 | Min: 0.02 | Max: 1.0
+    # * High: Fast radial centering in case of strong orbit drift.
+    # * Low: Radial centering speed capped to favor image pan-tilt softness.
+    maximum_speed: 0.15
+
+# ------------------------------------------------------------------------------
+# Camera Orientation and Aiming (Drone Look)
+# ------------------------------------------------------------------------------
+# Main Algo: Critically damped angular spring-damper (Mathf.SmoothDampAngle) towards the target
+aiming:
+  # Angular smoothing and vertical angle limits of camera towards the target
+  look_smooth:
+    # Damping time (in seconds) applied to look target damping (Pitch/Yaw) to track player
+    # Default: 0.8 | Min: 0.1 | Max: 5.0
+    # * High: Very damped and slow camera tracking (mimics a human cameraman handling a heavy camera).
+    # * Low: Robotic, immediate, and rigid lock on target (zero delay, mechanical look).
+    rotation_smooth_time: 0.8
+
+    # Maximum pan rotation speed of the camera (in degrees/second)
+    # Default: 45.0 | Min: 5.0 | Max: 180.0
+    # * High: Lightning-fast pan rotation if player passes by suddenly.
+    # * Low: Capped rotation speed (player may temporarily exit framing during sudden movements).
+    maximum_rotation_speed: 45.0
+
+    # Maximum vertical tilt angle (Pitch) of camera looking up or down (in degrees)
+    # Default: 70.0 | Min: 10.0 | Max: 90.0
+    # * High: Allows very pronounced plunging and high-angle tilt views.
+    # * Low: Keeps look angle close to horizon line (prevents distorted perspectives).
+    maximum_pitch_angle: 70.0
+
+# ------------------------------------------------------------------------------
+# Recovery Framing (Drone Framing)
+# ------------------------------------------------------------------------------
+framing:
+  # Safe backup target if camera loses sight of player
+  recovery:
+    # Horizontal replacement distance (in meters) relative to player if framing is lost
+    # Default: 4.0 | Min: 1.0 | Max: 15.0
+    # * High: Backup target lies far behind player (wide escape framing).
+    # * Low: Backup target very close behind player's back (tight escape framing).
+    distance: 4.0
+
+    # Backup recovery height (in meters) relative to player if visibility is lost
+    # Default: 2.0 | Min: 0.5 | Max: 10.0
+    # * High: Backup target climbs high above player (escape overlook).
+    # * Low: Backup target close to ground level.
+    height: 2.0
+
+    # Comfortable pitch angle (in degrees) used to calculate the recovery distance
+    # Default: 55.0 | Min: 10.0 | Max: 90.0
+    # * High: Shorter recovery distance is accepted for the same camera height.
+    # * Low: A greater recovery distance is required for the same camera height.
+    comfortable_pitch: 55.0
+
+# ------------------------------------------------------------------------------
+# Numerical Tolerances
+# ------------------------------------------------------------------------------
+numerical_tolerances:
+  # Default: 0.0001. Treat smaller squared destination offsets as zero.
+  destination_offset_squared: 0.0001
+  # Default: 0.001. Treat smaller squared directions/tangents as zero.
+  direction_squared: 0.001
+  # Default: 0.001 m. Ignore shorter cast or route segments.
+  minimum_segment_length: 0.001
+  # Default: 0.01 m. Treat smaller lateral route offsets as direct.
+  direct_route_offset: 0.01
+  # Default: 0.0001 s. Prevent division by zero on very short frames.
+  minimum_delta_time: 0.0001
+  # Default: 0.001 s. Minimum elapsed time for terrain-lift smoothing.
+  minimum_refresh_elapsed: 0.001
