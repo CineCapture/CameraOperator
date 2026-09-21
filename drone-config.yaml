@@ -246,10 +246,10 @@ flight_modes:
         look_ahead_seconds: 2.0
 
         # Radius of the drone's virtual sphere (in meters) tested during SphereCasts for physical collisions
-        # Default: 0.4 | Min: 0.05 | Max: 2.0
+        # Default: 0.35 | Min: 0.05 | Max: 2.0
         # * High: Immense safety bubble (avoids brushing the smallest leaf, but can lock up in narrow pathways).
         # * Low: Tight bubble (squeezes through narrow gaps, but risk of visible visual intersections with decor).
-        camera_radius: 0.4
+        camera_radius: 0.35
 
         # Fallback retreat distance (in meters) when an actor blocks the route and no detour is clear
         # Default: 2.0 | Min: 0.5 | Max: 10.0

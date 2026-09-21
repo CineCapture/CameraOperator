@@ -7,6 +7,7 @@ namespace DronePilot
     public sealed class DronePilotController : IDisposable
     {
         private readonly Camera _camera;
+        private readonly GameObject _visual;
         private readonly FlightContext _context;
         private readonly DroneConfigurationWatcher _configuration;
         private readonly PilotProfile[] _profiles;
@@ -22,15 +23,19 @@ namespace DronePilot
         public string FlightMode => _flight.Mode.ToString();
         public string ProfileName => _context.Profile?.Name;
         public Camera Camera => _camera;
+        public float CameraRadius => _context.N(
+            "flight_modes.trailing_flight.avoidance.detection.camera_radius");
 
         // Validates inputs and loads the drone's documented YAML configuration.
         public DronePilotController(
             Camera camera, GameObject target, string configurationPath,
             DroneWorld world, PilotProfile[] profiles,
             Vector3? aimOffset = null,
-            TelemetryOptions telemetry = null)
+            TelemetryOptions telemetry = null,
+            GameObject visual = null)
         {
             _camera = camera ?? throw new ArgumentNullException(nameof(camera));
+            _visual = visual;
             if (target == null) throw new ArgumentNullException(nameof(target));
             if (world == null) throw new ArgumentNullException(nameof(world));
             if (profiles == null || profiles.Length == 0)
@@ -63,6 +68,7 @@ namespace DronePilot
             _motion = new DroneMotion(_context);
             _look = new DroneLook(_context);
             _framing = new DroneFraming(_context);
+            SynchronizeVisual();
         }
 
         // Advances flight once after the target has moved for this frame.
@@ -182,8 +188,19 @@ namespace DronePilot
                 _context.Ground(next) + clearance);
             _camera.transform.position = next;
             _look.Update(_camera.transform, _context.Focus);
+            SynchronizeVisual();
             _telemetry.Sample(this, _context, _motion,
                 desired, probeTarget, clearance);
+        }
+
+        // Moves the caller-owned visual with the supplied camera.
+        private void SynchronizeVisual()
+        {
+            if (_visual != null)
+            {
+                _visual.transform.SetPositionAndRotation(
+                    _camera.transform.position, _camera.transform.rotation);
+            }
         }
     }
 }

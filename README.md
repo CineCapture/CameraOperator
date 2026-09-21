@@ -9,6 +9,8 @@ not create the camera, record video, or depend on a particular game.
   the last profile acts as the fallback.
 - Create a `DronePilotController` after camera warmup. Pass target velocity and
   maximum speed to `Update` from the Unity main thread after target movement.
+- Optionally pass a caller-owned visual `GameObject`. DronePilot moves it with
+  the camera but does not create, render, or destroy it.
 - Dispose the controller when it releases camera control. The camera remains
   owned by the caller.
 
