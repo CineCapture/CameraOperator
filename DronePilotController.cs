@@ -77,6 +77,7 @@ namespace DronePilot
             {
                 _context.Config = _configuration.Current;
                 _context.World.LogInfo?.Invoke("Drone configuration reloaded.");
+                _telemetry.Event("configuration_reloaded", "drone-config.yaml");
             }
             PilotProfile selected = SelectProfile();
             if (selected != _context.Profile)

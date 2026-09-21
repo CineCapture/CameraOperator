@@ -22,6 +22,7 @@ namespace DronePilot
         private float _nextFlush;
         private int _part;
         private bool _disposed;
+        private bool _reportedFailure;
 
         // Creates a unique diagnostic directory for this control session.
         internal TelemetrySession(TelemetryOptions options, Action<string> report)
@@ -65,6 +66,8 @@ namespace DronePilot
             sample["pilot_profile"] = pilot.ProfileName;
             sample["camera_world_m"] = Components(camera);
             sample["target_world_m"] = Components(target);
+            sample["camera_world_y_m"] = camera.y;
+            sample["target_world_y_m"] = target.y;
             sample["relative_world_m"] = Components(relative);
             sample["horizontal_distance_m"] =
                 new Vector2(relative.x, relative.z).magnitude;
@@ -209,8 +212,12 @@ namespace DronePilot
             {
                 if (_writer.IsFaulted)
                 {
-                    _report?.Invoke(
-                        $"Drone telemetry write failed: {_writer.Exception}");
+                    if (!_reportedFailure)
+                    {
+                        _report?.Invoke(
+                            $"Drone telemetry write failed: {_writer.Exception}");
+                        _reportedFailure = true;
+                    }
                     return false;
                 }
                 _writer = null;
