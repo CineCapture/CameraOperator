@@ -209,7 +209,7 @@ namespace DronePilot
                 : _context.B("flight_modes.orbit_flight.reactive_obstacle_avoidance.enabled");
             desired = _trajectory.Plan(position, desired, probeTarget,
                 _motion.Velocity, clearance, reactive);
-            float targetHeight = _context.Target.transform.position.y;
+            float targetHeight = _context.Focus.y;
             desired.y = Mathf.Max(desired.y, targetHeight);
             Vector3 next = _flight.Mode == DroneFlightMode.OrbitFlight &&
                 !recovering

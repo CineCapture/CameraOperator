@@ -62,7 +62,7 @@ flight_modes:
       high_altitude_extra: 7.0
 
       # Altitude threshold (in meters) where high-altitude extra trailing distance starts blending in
-      # Default: 2.0 | Min: 0.0 | Max: 10.0
+      # Default: 4.0 | Min: 0.0 | Max: 10.0
       # * High: High-altitude retreat only activates once the drone is already quite high.
       # * Low: Drone backs away at the slightest elevation or slope change.
       blend_start: 2.0
@@ -135,16 +135,16 @@ flight_modes:
       # Default: 2.0 | Min: 0.0 | Max: 10.0
       # * High: Drone can close a trailing gap faster.
       # * Low: Drone has little extra speed to close a trailing gap.
-      max_bonus: 2.0
+      max_bonus: 4.0
 
       # Upper bound on drone speed relative to the host-provided maxSpeed.
-      # Default: 1.5 times maxSpeed
+      # Default: 2.0 times maxSpeed
       # * High: More speed is available to close a large gap.
       # * Low: The drone cannot exceed the target's reference speed by much.
-      maximum_speed_multiplier: 1.5
+      maximum_speed_multiplier: 2.0
 
-      # Default: 0.5 (m/s per meter of position error). Builds catch-up speed.
-      position_error_speed_gain: 0.5
+      # Default: 0.8 (m/s per meter of position error). Builds catch-up speed.
+      position_error_speed_gain: 0.8
       # Default: 0.5 m/s. Below this target speed, directional fading is skipped.
       moving_target_speed_threshold: 0.5
       # Default: 5.0 m. Catch-up bonus starts fading near this behind distance.
@@ -153,16 +153,16 @@ flight_modes:
       behind_bonus_fade_end: 10.0
 
       # Dynamic acceleration response (gain) to close the gap if the drone is left behind
-      # Default: 3.0 | Min: 0.5 | Max: 10.0
+      # Default: 5.0 | Min: 0.5 | Max: 10.0
       # * High: Lightning-fast acceleration to catch up (high reactivity, but risk of sudden speed jumps).
       # * Low: Majestic and slow acceleration to close the gap (very smooth, but risk of prolonged lag).
-      speed_response: 3.0
+      speed_response: 5.0
 
       # Dynamic braking response (gain) to prevent overshooting the player on sudden stops
-      # Default: 6.0 | Min: 1.0 | Max: 20.0
+      # Default: 9.0 | Min: 1.0 | Max: 20.0
       # * High: Powerful and instant emergency braking on player stops (framing safety, rigid look).
       # * Low: Smooth and gradual braking (drone gracefully overshoots player by inertia before backing up).
-      brake_response: 6.0
+      brake_response: 9.0
 
     # Predictive curved route planner
     # Algo used: Quadratic Bézier curves (smooth curved trajectory generation)
@@ -172,10 +172,10 @@ flight_modes:
       enabled: true
 
       # Recalculation interval for the lateral avoidance Bézier curve (in seconds)
-      # Default: 0.5 | Min: 0.05 | Max: 2.0
+      # Default: 0.2 | Min: 0.05 | Max: 2.0
       # * High: Rare recalculations (saves CPU), but outdated trajectories if player turns sharply.
       # * Low: Continuous and highly reactive curve recalculation (perfectly adjusted path, more CPU).
-      refresh_interval: 0.5
+      refresh_interval: 0.2
 
       # Minimum prediction horizon (in seconds) after speed-based projection
       # Default: 0.8 | Min: 0.1 | Max: 2.0
@@ -423,42 +423,42 @@ kinematics:
   # Acceleration and jerk ceilings (horizontal and vertical)
   limits:
     # Maximum horizontal acceleration (in m/s²) allowed during standard smooth flight
-    # Default: 8.0 | Min: 1.0 | Max: 30.0
+    # Default: 14.0 | Min: 1.0 | Max: 30.0
     # * High: Drone accelerates vividly and twitchily (maximum reactivity).
     # * Low: Heavy and slow acceleration (drone feels very heavy, increases reaction time).
-    maximum_acceleration: 8.0
+    maximum_acceleration: 14.0
 
     # Maximum horizontal jerk (m/s³) - Acceleration rate change limit (determines organic inertia and fluidity)
-    # Default: 30.0 | Min: 5.0 | Max: 120.0
+    # Default: 60.0 | Min: 5.0 | Max: 120.0
     # * High: Sharp and mechanical speed changes (rigid/robotic look).
     # * Low: Extremely smoothed and progressive organic inertia (crane or Steadicam effect).
-    maximum_jerk: 30.0
+    maximum_jerk: 60.0
 
     # Maximum horizontal emergency acceleration (in m/s²) during sudden collision bypasses
-    # Default: 14.0 | Min: 5.0 | Max: 50.0
+    # Default: 22.0 | Min: 5.0 | Max: 50.0
     # * High: Extremely vigorous and fast emergency avoidance to dodge physical obstacles.
     # * Low: Lazy emergency avoidance (high risk of colliding before having time to brake).
-    emergency_acceleration: 14.0
+    emergency_acceleration: 22.0
 
     # Maximum emergency jerk (m/s³) during critical collision avoidance
-    # Default: 60.0 | Min: 10.0 | Max: 250.0
+    # Default: 100.0 | Min: 10.0 | Max: 250.0
     # * High: Sharp and instant emergency direction changes to flee danger.
     # * Low: Smooth and damped emergency direction changes (may lack reactivity against fine obstacles).
-    emergency_jerk: 60.0
+    emergency_jerk: 100.0
 
     # Maximum allowed vertical acceleration (in m/s²)
-    # Default: 2.5 | Min: 0.5 | Max: 10.0
+    # Default: 5.0 | Min: 0.5 | Max: 10.0
     # * High: Instant and energetic compensation of ground elevation or slope changes.
     # * Low: Very smooth vertical climbing/falling (risk of hitting ground during sudden slope changes).
-    maximum_vertical_acceleration: 2.5
+    maximum_vertical_acceleration: 5.0
 
   # Kinematic damping time constants (convergence gains)
   response_times:
     # Velocity solver response time (in seconds) to reach target nominal kinematic velocity
-    # Default: 0.25 | Min: 0.05 | Max: 2.0
+    # Default: 0.15 | Min: 0.05 | Max: 2.0
     # * High: Significant lag and "trailing effect" relative to target speed (lazy movement).
     # * Low: Drone reaches target speed almost instantaneously (very direct movement).
-    velocity_response_time: 0.25
+    velocity_response_time: 0.15
 
     # Emergency avoidance response time (in seconds) when facing imminent obstacle
     # Default: 0.1 | Min: 0.02 | Max: 1.0
@@ -467,30 +467,30 @@ kinematics:
     emergency_response_time: 0.1
 
     # Damping time (in seconds) to smooth vertical position adjustment transitions
-    # Default: 0.9 | Min: 0.1 | Max: 5.0
+    # Default: 0.45 | Min: 0.1 | Max: 5.0
     # * High: Extremely long and soft altitude damping (majestic gliding flight).
     # * Low: Sharp altitude adjustments without inertia (maximum reactivity to ground bumps).
-    vertical_smooth_time: 0.9
+    vertical_smooth_time: 0.45
 
     # Estimated time (in seconds) to converge horizontally to target destination waypoint
-    # Default: 1.0 | Min: 0.1 | Max: 5.0
+    # Default: 0.6 | Min: 0.1 | Max: 5.0
     # * High: Very smooth and progressive convergence towards target (perfect for cinema).
     # * Low: Drone charges in straight line and stops dead on target.
-    horizontal_arrival_time: 1.0
+    horizontal_arrival_time: 0.6
 
   # Vertical climbing and falling speeds
   vertical_speeds:
     # Standard vertical speed (in m/s) in normal cruise flight
-    # Default: 0.6 | Min: 0.1 | Max: 5.0
+    # Default: 1.2 | Min: 0.1 | Max: 5.0
     # * High: Drone climbs or descends very quickly during cruise.
     # * Low: Quiet and discrete height adjustments.
-    cruise_vertical_speed: 0.6
+    cruise_vertical_speed: 1.2
 
     # Maximum vertical speed (in m/s) during fast catch-up of player
-    # Default: 2.5 | Min: 0.5 | Max: 8.0
+    # Default: 4.0 | Min: 0.5 | Max: 8.0
     # * High: Lightning-fast climb or dive when drone is left behind (priority catch-up).
     # * Low: No vertical speed bonus, slow height catch-up (risk of staying under ground briefly).
-    catch_up_vertical_speed: 2.5
+    catch_up_vertical_speed: 4.0
 
     # Height-error range that blends cruise speed into catch-up speed.
     # Default: 2.0 m. Below this error, use cruise vertical speed.
@@ -526,16 +526,16 @@ aiming:
   # Angular smoothing and vertical angle limits of camera towards the target
   look_smooth:
     # Damping time (in seconds) applied to look target damping (Pitch/Yaw) to track player
-    # Default: 0.8 | Min: 0.1 | Max: 5.0
+    # Default: 0.3 | Min: 0.1 | Max: 5.0
     # * High: Very damped and slow camera tracking (mimics a human cameraman handling a heavy camera).
     # * Low: Robotic, immediate, and rigid lock on target (zero delay, mechanical look).
-    rotation_smooth_time: 0.8
+    rotation_smooth_time: 0.3
 
     # Maximum pan rotation speed of the camera (in degrees/second)
-    # Default: 45.0 | Min: 5.0 | Max: 180.0
+    # Default: 120.0 | Min: 5.0 | Max: 180.0
     # * High: Lightning-fast pan rotation if player passes by suddenly.
     # * Low: Capped rotation speed (player may temporarily exit framing during sudden movements).
-    maximum_rotation_speed: 45.0
+    maximum_rotation_speed: 120.0
 
     # Maximum vertical tilt angle (Pitch) of camera looking up or down (in degrees)
     # Default: 70.0 | Min: 10.0 | Max: 90.0
