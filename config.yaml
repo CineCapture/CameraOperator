@@ -356,10 +356,10 @@ flight_modes:
     # Radius and height constraints of the drone during rotation
     height_constraints:
       # Minimum allowed orbit radius (in meters) around the player
-      # Default: 2.0 | Min: 1.0 | Max: 10.0
+      # Default: 3.0 | Min: 1.0 | Max: 10.0
       # * High: Orbit radius remains large (risk of collision with walls in confined spaces).
       # * Low: Allows drone to rotate very close to player (ideal for indoor environments).
-      minimum_radius: 2.0
+      minimum_radius: 3.0
 
       # Minimum ground height allowed during orbital movements (in meters)
       # Default: 0.5 | Min: 0.1 | Max: 5.0
