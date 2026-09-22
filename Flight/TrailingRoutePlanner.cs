@@ -31,8 +31,11 @@ namespace DronePilot
                 _context.N("flight_modes.trailing_flight.planner.minimum_horizon"),
                 _context.N("flight_modes.trailing_flight.planner.maximum_horizon"));
             Vector3 endpoint = desired + Flatten(playerVelocity) * horizon;
-            endpoint = KeepBehindPlayer(
-                endpoint, playerPosition, playerVelocity);
+            if (!_context.HasTrailingViewDirection)
+            {
+                endpoint = KeepBehindPlayer(
+                    endpoint, playerPosition, playerVelocity);
+            }
             if (_initialized && Time.time < _nextRefreshTime)
             {
                 return _directRoute ? endpoint : _waypoint;

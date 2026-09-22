@@ -130,6 +130,29 @@ namespace DronePilot
             _droneVisual?.SetAppearance(visible, color);
         }
 
+        // Cuts immediately to a new position and clears previous flight momentum.
+        public void Reposition(Vector3 position)
+        {
+            if (_disposed) throw new ObjectDisposedException(nameof(DronePilotController));
+            Vector3 radial = position - _context.Target.transform.position;
+            radial.y = 0f;
+            if (radial.sqrMagnitude > 0.001f)
+            {
+                _context.TrailingViewDirectionLocal =
+                    _context.Target.transform.InverseTransformDirection(
+                        radial.normalized);
+                _context.HasTrailingViewDirection = true;
+            }
+            _camera.transform.position = position;
+            _camera.transform.LookAt(_context.Focus, Vector3.up);
+            _motion.Initialize(Vector3.zero);
+            _flight.Reset();
+            _trajectory.Reset();
+            _look.Initialize();
+            SynchronizeVisual();
+            _context.Event?.Invoke("camera_cut", position.ToString("F2"));
+        }
+
         // Releases telemetry and the built-in visual without destroying the camera.
         public void Dispose()
         {

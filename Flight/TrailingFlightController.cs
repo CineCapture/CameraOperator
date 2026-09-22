@@ -68,11 +68,13 @@ namespace DronePilot
                 Mathf.Sin(Time.time * _context.N("flight_modes.trailing_flight.position_variation.distance_rate")) *
                 _context.N("flight_modes.trailing_flight.position_variation.distance_amplitude_fraction"));
             distance += HeightDistance(altitude);
-            Vector3 right = Vector3.Cross(Vector3.up, direction);
+            Vector3 radial = _context.HasTrailingViewDirection
+                ? _context.TrailingViewDirection : -direction;
+            Vector3 right = Vector3.Cross(Vector3.up, radial);
             float lateral = Mathf.Sin(Time.time *
                 _context.N("flight_modes.trailing_flight.position_variation.lateral_rate")) *
                 _context.N("flight_modes.trailing_flight.position_variation.lateral_amplitude");
-            Vector3 target = playerPosition - direction * distance +
+            Vector3 target = playerPosition + radial * distance +
                              right * lateral;
             target.y = GroundHeight(target) + altitude;
             return target;
@@ -86,7 +88,8 @@ namespace DronePilot
             float bonus = Mathf.Min(
                 error * _context.N("flight_modes.trailing_flight.catch_up.position_error_speed_gain"),
                 _context.N("flight_modes.trailing_flight.catch_up.max_bonus"));
-            if (playerSpeed > _context.N("flight_modes.trailing_flight.catch_up.moving_target_speed_threshold"))
+            if (!_context.HasTrailingViewDirection &&
+                playerSpeed > _context.N("flight_modes.trailing_flight.catch_up.moving_target_speed_threshold"))
             {
                 Vector3 travel = Flatten(_context.TargetVelocity).normalized;
                 float behind = Vector3.Dot(

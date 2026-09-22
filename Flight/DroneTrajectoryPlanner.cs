@@ -25,6 +25,19 @@ namespace DronePilot
         private bool _initialized;
         internal bool EmergencyAvoidance { get; private set; }
 
+        // Clears cached routes and avoidance state after a camera cut.
+        internal void Reset()
+        {
+            _initialized = false;
+            _plannedTarget = Vector3.zero;
+            _smoothedTerrainLift = 0f;
+            _terrainLiftVelocity = 0f;
+            _lastAvoidanceDecision = null;
+            _activeObstacleId = 0;
+            _avoidanceSide = 0f;
+            EmergencyAvoidance = false;
+        }
+
         // Reuses one plan for 100 ms before simulating routes again.
         internal Vector3 Plan(
             Vector3 origin, Vector3 desired, Vector3 probeTarget,

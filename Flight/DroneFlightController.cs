@@ -23,6 +23,13 @@ namespace DronePilot
         internal DroneFlightMode Mode => _mode;
         internal Vector3 TrajectoryProbeTarget { get; private set; }
 
+        // Reinitializes mode selection after an intentional camera cut.
+        internal void Reset()
+        {
+            _initialized = false;
+            TrajectoryProbeTarget = Vector3.zero;
+        }
+
         // Predicts the trailing route without involving the orbit controller.
         internal Vector3 PlanTrailingRoute(
             Vector3 origin, Vector3 target, Vector3 droneVelocity,
@@ -81,6 +88,20 @@ namespace DronePilot
             float playerSpeed, float droneSpeed,
             float maximumOrbitHeight)
         {
+            if (_context.HasTrailingViewDirection)
+            {
+                if (!_initialized)
+                {
+                    InitializeMode(DroneFlightMode.TrailingFlight,
+                        playerPosition, dronePosition);
+                }
+                else
+                {
+                    ChangeMode(DroneFlightMode.TrailingFlight,
+                        playerPosition, dronePosition);
+                }
+                return;
+            }
             float distance = Flatten(
                 dronePosition - playerPosition).magnitude;
             DroneFlightMode next = _mode;
