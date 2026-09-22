@@ -93,14 +93,13 @@ namespace DronePilot
             Vector3 momentumProbe = origin + velocity.normalized * lookAhead;
             if (!TryGetObstacle(
                     origin, momentumProbe, lookAhead,
-                    out Collider obstacle))
+                    out _, out float obstacleDistance))
             {
                 return desiredProbe;
             }
 
             // A close obstacle needs faster steering than normal flight.
-            EmergencyAvoidance = Vector3.Distance(
-                origin, obstacle.ClosestPoint(origin)) <
+            EmergencyAvoidance = obstacleDistance <
                 _context.N("flight_modes.trailing_flight.avoidance.detection.emergency_distance");
             followsMomentum = true;
             return momentumProbe;
@@ -113,14 +112,14 @@ namespace DronePilot
             float terrainClearance)
         {
             if (!TryGetObstacle(
-                    origin, probeTarget, lookAhead, out Collider obstacle))
+                    origin, probeTarget, lookAhead,
+                    out Collider obstacle, out float obstacleDistance))
             {
                 LogDirectPathRestored();
                 ClearExpiredAvoidanceSide();
                 return target;
             }
-            EmergencyAvoidance |= Vector3.Distance(
-                origin, obstacle.ClosestPoint(origin)) <
+            EmergencyAvoidance |= obstacleDistance <
                 _context.N("flight_modes.trailing_flight.avoidance.detection.emergency_distance");
             PrepareAvoidanceSide(obstacle);
 
@@ -280,15 +279,16 @@ namespace DronePilot
         private bool HasObstacle(
             Vector3 origin, Vector3 target, float lookAhead)
         {
-            return TryGetObstacle(origin, target, lookAhead, out _);
+            return TryGetObstacle(origin, target, lookAhead, out _, out _);
         }
 
         // Returns the nearest collider blocking one simulated route.
         private bool TryGetObstacle(
             Vector3 origin, Vector3 target, float lookAhead,
-            out Collider obstacle)
+            out Collider obstacle, out float obstacleDistance)
         {
             obstacle = null;
+            obstacleDistance = float.MaxValue;
             Vector3 movement = target - origin;
             float distance = Mathf.Min(movement.magnitude, lookAhead);
             if (distance < _context.N("numerical_tolerances.minimum_segment_length"))
@@ -299,13 +299,13 @@ namespace DronePilot
             RaycastHit[] hits = Physics.SphereCastAll(
                 origin, _context.N("flight_modes.trailing_flight.avoidance.detection.camera_radius"), movement.normalized, distance,
                 Physics.AllLayers, QueryTriggerInteraction.Ignore);
-            float nearestDistance = float.MaxValue;
             foreach (RaycastHit hit in hits)
             {
-                if (IsObstacle(hit.collider) && hit.distance < nearestDistance)
+                if (IsObstacle(hit.collider) &&
+                    hit.distance < obstacleDistance)
                 {
                     obstacle = hit.collider;
-                    nearestDistance = hit.distance;
+                    obstacleDistance = hit.distance;
                 }
             }
 
