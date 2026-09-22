@@ -4,7 +4,7 @@ using System.IO;
 namespace DronePilot
 {
     // Polls a YAML file and publishes only complete validated snapshots.
-    public sealed class DroneConfigurationWatcher
+    public sealed class ConfigWatcher
     {
         private readonly string _path;
         private readonly Action<string> _reportError;
@@ -14,16 +14,16 @@ namespace DronePilot
         private DateTime _retryUtc;
         private int _retryCount;
 
-        public DroneConfiguration Current { get; private set; }
+        public Configuration Current { get; private set; }
 
         // Creates a documented file when absent, then validates it at startup.
-        public DroneConfigurationWatcher(
+        public ConfigWatcher(
             string path, Action<string> reportError = null)
         {
             _path = Path.GetFullPath(path);
             _reportError = reportError;
-            DroneConfiguration.CreateDefaultIfMissing(_path);
-            Current = DroneConfiguration.Load(_path);
+            Configuration.CreateDefaultIfMissing(_path);
+            Current = Configuration.Load(_path);
             RememberFile();
         }
 
@@ -44,7 +44,7 @@ namespace DronePilot
                 {
                     return false;
                 }
-                DroneConfiguration next = DroneConfiguration.Load(_path);
+                Configuration next = Configuration.Load(_path);
                 Current = next;
                 RememberFile();
                 _retryCount = 0;

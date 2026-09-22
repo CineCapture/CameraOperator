@@ -1,9 +1,9 @@
 using System;
 
-namespace DronePilot
+namespace DronePilot.Telemetry
 {
     // Defines one caller-owned diagnostic session independently of recording.
-    public sealed class TelemetryOptions
+    public sealed class Options
     {
         public bool Enabled { get; set; }
         public string RootDirectory { get; set; }

@@ -5,7 +5,7 @@ namespace DronePilot
     // Shares the current configuration, world queries, and flight inputs.
     internal sealed class FlightContext
     {
-        internal DroneConfiguration Config;
+        internal Configuration Config;
         internal DroneWorld World;
         internal PilotProfile Profile;
         internal GameObject Target;

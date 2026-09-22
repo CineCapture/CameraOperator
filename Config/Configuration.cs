@@ -10,7 +10,7 @@ using YamlDotNet.RepresentationModel;
 namespace DronePilot
 {
     // Holds a validated, immutable snapshot of the drone's YAML settings.
-    public sealed class DroneConfiguration
+    public sealed class Configuration
     {
         private readonly Dictionary<string, string> _values;
         private readonly Dictionary<string, int> _sequences;
@@ -19,7 +19,7 @@ namespace DronePilot
         private readonly Dictionary<string, bool> _booleans =
             new Dictionary<string, bool>(StringComparer.Ordinal);
 
-        private DroneConfiguration(
+        private Configuration(
             Dictionary<string, string> values,
             Dictionary<string, int> sequences)
         {
@@ -43,10 +43,9 @@ namespace DronePilot
         // Loads the documented default template embedded in this assembly.
         public static string DefaultYaml()
         {
-            Assembly assembly = typeof(DroneConfiguration).Assembly;
-            string resource = assembly.GetManifestResourceNames()
-                .Single(name => name.EndsWith("drone-config.yaml"));
-            using (Stream stream = assembly.GetManifestResourceStream(resource))
+            Assembly assembly = typeof(Configuration).Assembly;
+            using (Stream stream = assembly.GetManifestResourceStream(
+                "DronePilot.config.yaml"))
             using (var reader = new StreamReader(stream))
             {
                 return reader.ReadToEnd();
@@ -70,7 +69,7 @@ namespace DronePilot
         }
 
         // Parses one complete YAML document and rejects missing or invalid keys.
-        public static DroneConfiguration Parse(string yaml)
+        public static Configuration Parse(string yaml)
         {
             var values = new Dictionary<string, string>(StringComparer.Ordinal);
             var sequences = new Dictionary<string, int>(StringComparer.Ordinal);
@@ -79,14 +78,14 @@ namespace DronePilot
             var defaultSequences = new Dictionary<string, int>(StringComparer.Ordinal);
             ReadNode(ParseRoot(DefaultYaml()), "", defaults, defaultSequences);
             ValidateShape(values, sequences, defaults, defaultSequences);
-            var configuration = new DroneConfiguration(values, sequences);
+            var configuration = new Configuration(values, sequences);
             configuration.ValidateDocumentedRanges();
             configuration.ValidateRelationships();
             return configuration;
         }
 
         // Reads and validates an existing configuration file.
-        public static DroneConfiguration Load(string path)
+        public static Configuration Load(string path)
         {
             return Parse(File.ReadAllText(path));
         }
@@ -223,7 +222,7 @@ namespace DronePilot
                     throw new FormatException($"Invalid sequence: {pair.Key}.");
                 }
             }
-            var candidate = new DroneConfiguration(values, sequences);
+            var candidate = new Configuration(values, sequences);
             foreach (var pair in defaults)
             {
                 if (!values.ContainsKey(pair.Key))

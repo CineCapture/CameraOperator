@@ -1,4 +1,5 @@
 using System;
+using DronePilot.Telemetry;
 using UnityEngine;
 
 namespace DronePilot
@@ -8,15 +9,16 @@ namespace DronePilot
     {
         private readonly Camera _camera;
         private readonly GameObject _visual;
+        private readonly DroneVisual _droneVisual;
         private readonly FlightContext _context;
-        private readonly DroneConfigurationWatcher _configuration;
+        private readonly ConfigWatcher _configuration;
         private readonly PilotProfile[] _profiles;
         private readonly DroneFlightController _flight;
         private readonly DroneTrajectoryPlanner _trajectory;
         private readonly DroneMotion _motion;
         private readonly DroneLook _look;
         private readonly DroneFraming _framing;
-        private readonly TelemetrySession _telemetry;
+        private readonly Session _telemetry;
         private bool _initialized;
         private bool _disposed;
 
@@ -31,8 +33,9 @@ namespace DronePilot
             Camera camera, GameObject target, string configurationPath,
             DroneWorld world, PilotProfile[] profiles,
             Vector3? aimOffset = null,
-            TelemetryOptions telemetry = null,
-            GameObject visual = null)
+            Options telemetry = null,
+            GameObject visual = null,
+            DroneVisualOptions droneVisual = null)
         {
             _camera = camera ?? throw new ArgumentNullException(nameof(camera));
             _visual = visual;
@@ -41,7 +44,7 @@ namespace DronePilot
             if (profiles == null || profiles.Length == 0)
                 throw new ArgumentException("At least one pilot profile is required.");
             _profiles = profiles;
-            _configuration = new DroneConfigurationWatcher(
+            _configuration = new ConfigWatcher(
                 configurationPath, world.LogWarning);
             foreach (PilotProfile profile in profiles)
             {
@@ -60,15 +63,34 @@ namespace DronePilot
                 AimOffset = aimOffset ?? DefaultAimOffset(target)
             };
             _context.Profile = SelectProfile();
-            _telemetry = new TelemetrySession(
-                telemetry ?? new TelemetryOptions(), world.LogWarning);
+            _telemetry = new Session(
+                telemetry ?? new Options(), world.LogWarning);
             _context.Event = _telemetry.Event;
             _flight = new DroneFlightController(_context);
             _trajectory = new DroneTrajectoryPlanner(_context);
             _motion = new DroneMotion(_context);
             _look = new DroneLook(_context);
             _framing = new DroneFraming(_context);
+            _droneVisual = CreateVisual(droneVisual);
             SynchronizeVisual();
+        }
+
+        // Creates and initializes the optional built-in drone model.
+        private DroneVisual CreateVisual(DroneVisualOptions options)
+        {
+            if (options == null)
+            {
+                return null;
+            }
+            if (options.ViewerCamera == null)
+            {
+                throw new ArgumentException("The drone visual needs a viewer camera.");
+            }
+            GameObject visualObject = new GameObject("DronePilotVisual");
+            DroneVisual droneVisual = visualObject.AddComponent<DroneVisual>();
+            droneVisual.Initialize(_camera, options);
+            droneVisual.SetRadius(CameraRadius);
+            return droneVisual;
         }
 
         // Advances flight once after the target has moved for this frame.
@@ -83,7 +105,7 @@ namespace DronePilot
             {
                 _context.Config = _configuration.Current;
                 _context.World.LogInfo?.Invoke("Drone configuration reloaded.");
-                _telemetry.Event("configuration_reloaded", "drone-config.yaml");
+                _telemetry.Event("configuration_reloaded", "config.yaml");
             }
             PilotProfile selected = SelectProfile();
             if (selected != _context.Profile)
@@ -101,9 +123,21 @@ namespace DronePilot
             AdvanceFlight();
         }
 
-        // Releases telemetry and other session state without destroying the camera.
+        // Changes the built-in visual without affecting drone flight.
+        public void SetVisual(bool visible, DroneShellColor color)
+        {
+            if (_disposed) throw new ObjectDisposedException(nameof(DronePilotController));
+            _droneVisual?.SetAppearance(visible, color);
+        }
+
+        // Releases telemetry and the built-in visual without destroying the camera.
         public void Dispose()
         {
+            _droneVisual?.Dispose();
+            if (_droneVisual != null)
+            {
+                UnityEngine.Object.Destroy(_droneVisual.gameObject);
+            }
             _telemetry.Dispose();
             _disposed = true;
         }
@@ -201,6 +235,8 @@ namespace DronePilot
                 _visual.transform.SetPositionAndRotation(
                     _camera.transform.position, _camera.transform.rotation);
             }
+            _droneVisual?.Synchronize();
+            _droneVisual?.SetRadius(CameraRadius);
         }
     }
 }

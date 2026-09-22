@@ -5,12 +5,12 @@ using System.Threading.Tasks;
 using Newtonsoft.Json;
 using UnityEngine;
 
-namespace DronePilot
+namespace DronePilot.Telemetry
 {
     // Buffers plain diagnostic data and writes one JSON array per interval.
-    internal sealed class TelemetrySession : IDisposable
+    internal sealed class Session : IDisposable
     {
-        private readonly TelemetryOptions _options;
+        private readonly Options _options;
         private readonly Action<string> _report;
         private readonly string _directory;
         private readonly DateTime _startedUtc;
@@ -25,7 +25,7 @@ namespace DronePilot
         private bool _reportedFailure;
 
         // Creates a unique diagnostic directory for this control session.
-        internal TelemetrySession(TelemetryOptions options, Action<string> report)
+        internal Session(Options options, Action<string> report)
         {
             _options = options;
             _report = report;

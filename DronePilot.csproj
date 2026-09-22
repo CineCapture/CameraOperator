@@ -8,7 +8,6 @@
     <Nullable>disable</Nullable>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Remove="Tests/**/*.cs" />
     <Reference Include="UnityEngine.CoreModule">
       <HintPath>$(UnityManagedPath)/UnityEngine.CoreModule.dll</HintPath>
       <Private>false</Private>
@@ -17,8 +16,15 @@
       <HintPath>$(UnityManagedPath)/UnityEngine.PhysicsModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <Reference Include="UnityEngine.AssetBundleModule">
+      <HintPath>$(UnityManagedPath)/UnityEngine.AssetBundleModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
     <PackageReference Include="YamlDotNet" Version="16.3.0" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
-    <EmbeddedResource Include="drone-config.yaml" />
+    <EmbeddedResource Include="config.yaml" />
+    <EmbeddedResource Include="assets/drone">
+      <LogicalName>DronePilot.drone</LogicalName>
+    </EmbeddedResource>
   </ItemGroup>
 </Project>
