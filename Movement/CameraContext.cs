@@ -7,7 +7,6 @@ namespace CameraOperator
     {
         internal Configuration Config;
         internal CameraWorld World;
-        internal CameraProfile Profile;
         internal GameObject Target;
         internal Vector3 TargetVelocity;
         internal float MaxSpeed;

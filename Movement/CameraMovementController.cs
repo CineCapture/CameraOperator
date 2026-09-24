@@ -56,10 +56,8 @@ namespace CameraOperator
             Vector3 target = playerPosition +
                              _context.CameraDirectionWorld *
                              _context.CameraDistance;
-            float preferredHeight = Mathf.Min(
-                _context.CameraHeightAboveGround,
-                _context.Profile.MaximumHeight);
-            float height = Mathf.Max(preferredHeight, terrainClearance);
+            float height = Mathf.Max(
+                _context.CameraHeightAboveGround, terrainClearance);
             target.y = GroundHeight(target) + height;
             return target;
         }

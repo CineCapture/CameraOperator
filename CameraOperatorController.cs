@@ -9,7 +9,6 @@ namespace CameraOperator
         private readonly Camera _camera;
         private readonly CameraContext _context;
         private readonly ConfigWatcher _configuration;
-        private readonly CameraProfile[] _profiles;
         private readonly CameraMovementController _movement;
         private readonly CameraPathPlanner _trajectory;
         private readonly CameraMotion _motion;
@@ -18,36 +17,24 @@ namespace CameraOperator
         private bool _initialized;
         private bool _disposed;
 
-        public float MaximumHeight => _context.Profile.MaximumHeight;
         public float TargetHeight => _context.N("aiming.target_height");
         public Configuration Settings => _context.Config;
 
         // Validates inputs and loads the camera's documented YAML configuration.
         public CameraOperatorController(
             Camera camera, GameObject target, string configurationPath,
-            CameraWorld world, CameraProfile[] profiles)
+            CameraWorld world)
         {
             _camera = camera ?? throw new ArgumentNullException(nameof(camera));
             if (target == null) throw new ArgumentNullException(nameof(target));
             if (world == null) throw new ArgumentNullException(nameof(world));
-            if (profiles == null || profiles.Length == 0)
-                throw new ArgumentException("At least one camera profile is required.");
-            _profiles = profiles;
             _configuration = new ConfigWatcher(
                 configurationPath, world.LogWarning);
-            foreach (CameraProfile profile in profiles)
-            {
-                if (profile == null)
-                {
-                    throw new ArgumentException("Invalid camera profile.");
-                }
-            }
             _context = new CameraContext
             {
                 Target = target, World = world,
                 Config = _configuration.Current
             };
-            _context.Profile = SelectProfile();
             _movement = new CameraMovementController(_context);
             _trajectory = new CameraPathPlanner(_context);
             _motion = new CameraMotion(_context);
@@ -67,12 +54,6 @@ namespace CameraOperator
             {
                 _context.Config = _configuration.Current;
                 _context.World.LogInfo?.Invoke("Camera Operator configuration reloaded.");
-            }
-            CameraProfile selected = SelectProfile();
-            if (selected != _context.Profile)
-            {
-                _context.Profile = selected;
-                _context.World.LogInfo?.Invoke($"Camera profile: {selected.Name}.");
             }
             if (!_initialized)
             {
@@ -110,20 +91,6 @@ namespace CameraOperator
         public void Dispose()
         {
             _disposed = true;
-        }
-
-        // Selects the first host profile whose condition matches the camera.
-        private CameraProfile SelectProfile()
-        {
-            Vector3 position = _camera.transform.position;
-            foreach (CameraProfile profile in _profiles)
-            {
-                if (profile.IsActive?.Invoke(position) == true)
-                {
-                    return profile;
-                }
-            }
-            return _profiles[_profiles.Length - 1];
         }
 
         // Applies the former SagaCapture movement pipeline to the supplied camera.

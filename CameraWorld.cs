@@ -9,6 +9,7 @@ namespace CameraOperator
         public Func<Vector3, float?> GroundHeight { get; set; }
         public Func<Collider, bool> IgnoreObstacle { get; set; }
         public Func<Collider, bool> IsActor { get; set; }
+        public Action<string> LogDebug { get; set; }
         public Action<string> LogInfo { get; set; }
         public Action<string> LogWarning { get; set; }
 

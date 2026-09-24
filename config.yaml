@@ -2,17 +2,15 @@
 # Camera Positioning
 # ------------------------------------------------------------------------------
 positioning:
-  # Shared by the front, rear, left, and right positions.
+  # Shared by the front, left, right, and their elevated variants.
   # Distance from the player in meters.
   # Default: 3.0 | Min: 1.0 | Max: 20.0
   minimum_distance: 3.0
   # Default: 8.0 | Min: 2.0 | Max: 30.0
   maximum_distance: 8.0
-  # Height above terrain, blended by distance.
-  # Default: 2.0 | Min: 0.5 | Max: 10.0
-  minimum_height: 2.0
-  # Default: 8.0 | Min: 1.0 | Max: 20.0
-  maximum_height: 8.0
+  # Extra height added by FrontTop, LeftTop, and RightTop placements.
+  # Default: 4.0 | Min: 0.0 | Max: 20.0
+  top_height: 4.0
   # Maximum random horizontal angle offset around the selected direction.
   # Default: 25.0 | Min: 0.0 | Max: 45.0
   angle_variation: 25.0

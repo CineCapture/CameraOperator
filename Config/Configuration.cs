@@ -199,7 +199,6 @@ namespace CameraOperator
         {
             const string root = "positioning.";
             Less(root + "minimum_distance", root + "maximum_distance");
-            Less(root + "minimum_height", root + "maximum_height");
         }
 
         // Enforces the min/max bounds documented beside template settings.

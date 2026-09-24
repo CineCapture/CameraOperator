@@ -219,7 +219,7 @@ namespace CameraOperator
                 return;
             }
 
-            _context.World.LogWarning?.Invoke(
+            _context.World.LogDebug?.Invoke(
                 $"Camera avoidance: obstacle={kind} '{name}', " +
                 $"maneuver={maneuver}.");
             _lastAvoidanceDecision = decision;
@@ -236,7 +236,7 @@ namespace CameraOperator
                 return;
             }
 
-            _context.World.LogInfo?.Invoke(
+            _context.World.LogDebug?.Invoke(
                 "Camera avoidance ended: direct trajectory restored.");
             _lastAvoidanceDecision = "direct";
             _avoidanceSideHoldUntil = Time.time +

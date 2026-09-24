@@ -20,11 +20,22 @@ The host application acts as the director. It is expected to:
 
 - create and own the camera;
 - decide whether to show this camera or the gameplay camera;
-- choose a starting position and call `Reposition` for each new view;
+- choose a `CameraPlacement`, turn it into a world position, and call
+  `Reposition` for each new view;
 - decide how long each view lasts and when to switch to another one;
 - start and stop video recording when needed.
 
 CameraOperator only moves and aims the camera between reposition requests.
+
+## Placements
+
+`CameraPlacement` provides six named choices for a host director:
+
+- `Front`, `Left`, and `Right`;
+- `FrontTop`, `LeftTop`, and `RightTop` for elevated views.
+
+The host decides which placements are allowed. It may use `top_height` from
+`config.yaml` as the extra elevation for the three `Top` placements.
 
 ## Create an operator
 
@@ -37,22 +48,14 @@ CameraWorld world = new CameraWorld
     GroundHeight = position => GetGroundHeight(position),
     IgnoreObstacle = collider => collider.isTrigger,
     IsActor = collider => collider.CompareTag("Player"),
+    LogDebug = Debug.Log,
     LogInfo = Debug.Log,
     LogWarning = Debug.LogWarning
 };
 
-CameraProfile[] profiles =
-{
-    new CameraProfile("Forest", 4f, position => IsForest(position)),
-    new CameraProfile("Open area", 8f, position => true)
-};
-
 CameraOperatorController cameraOperator = new CameraOperatorController(
-    camera, player, configPath, world, profiles);
+    camera, player, configPath, world);
 ```
-
-The first matching profile is used. Keep a final profile that always matches as
-the fallback.
 
 ## Update the camera
 
@@ -70,13 +73,16 @@ private void LateUpdate()
 Use `Reposition` when another system chooses a new camera position:
 
 ```csharp
-Vector3 newPosition = player.transform.position +
-    new Vector3(-5f, 3f, 0f);
+CameraPlacement placement = CameraPlacement.LeftTop;
+Vector3 newPosition = CalculatePosition(
+    placement, player.transform.position);
 
 cameraOperator.Reposition(newPosition, playerVelocity);
 ```
 
-CameraOperator then follows the target from this new direction and distance.
+Here, `placement` records the director's choice and `newPosition` is the world
+position calculated for it. CameraOperator then follows the target from this
+new direction and distance.
 
 ## Clean up
 
