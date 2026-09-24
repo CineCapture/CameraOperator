@@ -84,6 +84,13 @@ Here, `placement` records the director's choice and `newPosition` is the world
 position calculated for it. CameraOperator then follows the target from this
 new direction and distance.
 
+Use `DirectionFromTarget` when the host director needs to compare a proposed
+view with the camera's current horizontal direction:
+
+```csharp
+Vector3 currentDirection = cameraOperator.DirectionFromTarget;
+```
+
 ## Clean up
 
 ```csharp

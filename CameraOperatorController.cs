@@ -19,6 +19,17 @@ namespace CameraOperator
 
         public float TargetHeight => _context.N("aiming.target_height");
         public Configuration Settings => _context.Config;
+        public Vector3 DirectionFromTarget
+        {
+            get
+            {
+                Vector3 direction = _camera.transform.position -
+                    _context.Target.transform.position;
+                direction.y = 0f;
+                return direction.sqrMagnitude > CameraConstants.DirectionSquared
+                    ? direction.normalized : Vector3.zero;
+            }
+        }
 
         // Validates inputs and loads the camera's documented YAML configuration.
         public CameraOperatorController(
