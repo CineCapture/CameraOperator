@@ -2,8 +2,8 @@
   <PropertyGroup>
     <TargetFramework>net48</TargetFramework>
     <LangVersion>10</LangVersion>
-    <AssemblyName>DronePilot</AssemblyName>
-    <RootNamespace>DronePilot</RootNamespace>
+    <AssemblyName>CameraOperator</AssemblyName>
+    <RootNamespace>CameraOperator</RootNamespace>
     <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
     <Nullable>disable</Nullable>
   </PropertyGroup>
@@ -16,15 +16,7 @@
       <HintPath>$(UnityManagedPath)/UnityEngine.PhysicsModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
-    <Reference Include="UnityEngine.AssetBundleModule">
-      <HintPath>$(UnityManagedPath)/UnityEngine.AssetBundleModule.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
     <PackageReference Include="YamlDotNet" Version="16.3.0" />
-    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     <EmbeddedResource Include="config.yaml" />
-    <EmbeddedResource Include="assets/drone">
-      <LogicalName>DronePilot.drone</LogicalName>
-    </EmbeddedResource>
   </ItemGroup>
 </Project>

@@ -1,14 +1,14 @@
 using UnityEngine;
 
-namespace DronePilot
+namespace CameraOperator
 {
     // Anticipates terrain and selects simple lateral obstacle detours.
-    internal sealed class DroneTrajectoryPlanner
+    internal sealed class CameraPathPlanner
     {
-        private readonly FlightContext _context;
+        private readonly CameraContext _context;
 
-        // Binds the flight policy to one drone session.
-        internal DroneTrajectoryPlanner(FlightContext context)
+        // Binds the camera movement policy to one camera session.
+        internal CameraPathPlanner(CameraContext context)
         {
             _context = context;
         }
@@ -42,7 +42,7 @@ namespace DronePilot
         internal Vector3 Plan(
             Vector3 origin, Vector3 desired, Vector3 probeTarget,
             Vector3 velocity,
-            float terrainClearance, bool useReactiveObstacleAvoidance)
+            float terrainClearance)
         {
             if (_initialized && Time.time < _nextRefreshTime)
             {
@@ -50,17 +50,16 @@ namespace DronePilot
             }
 
             float lookAhead = Mathf.Max(
-                _context.N("flight_modes.trailing_flight.avoidance.detection.minimum_look_ahead"), velocity.magnitude * _context.N("flight_modes.trailing_flight.avoidance.detection.look_ahead_seconds"));
+                _context.N("obstacle_avoidance.minimum_look_ahead"), velocity.magnitude * _context.N("obstacle_avoidance.look_ahead_seconds"));
             float requiredLift = GetRequiredTerrainLift(
                 origin, probeTarget, lookAhead, terrainClearance);
             float smoothTime = requiredLift > _smoothedTerrainLift
-                ? _context.N("flight_modes.trailing_flight.avoidance.terrain_following.rise_smooth_time")
-                : _context.N("flight_modes.trailing_flight.avoidance.terrain_following.fall_smooth_time");
+                ? _context.N("terrain_following.rise_smooth_time")
+                : _context.N("terrain_following.fall_smooth_time");
             float elapsed = _initialized
-                ? Mathf.Max(
-                    _context.N("numerical_tolerances.minimum_refresh_elapsed"),
+                ? Mathf.Max(CameraConstants.MinimumRefreshElapsed,
                     Time.time - _lastRefreshTime)
-                : _context.N("flight_modes.trailing_flight.avoidance.detection.refresh_interval");
+                : _context.N("obstacle_avoidance.refresh_interval");
             _smoothedTerrainLift = Mathf.SmoothDamp(
                 _smoothedTerrainLift, requiredLift,
                 ref _terrainLiftVelocity, smoothTime,
@@ -69,36 +68,31 @@ namespace DronePilot
             EmergencyAvoidance = false;
             Vector3 routeTarget = target;
             Vector3 reactiveProbe = probeTarget;
-            if (useReactiveObstacleAvoidance)
+            reactiveProbe = GetReactiveProbe(
+                origin, probeTarget, velocity, lookAhead,
+                out bool followsMomentum);
+            if (followsMomentum)
             {
-                reactiveProbe = GetReactiveProbe(
-                    origin, probeTarget, velocity, lookAhead,
-                    out bool followsMomentum);
-                if (followsMomentum)
-                {
-                    routeTarget = reactiveProbe;
-                    routeTarget.y = target.y;
-                }
+                routeTarget = reactiveProbe;
+                routeTarget.y = target.y;
             }
-            _plannedTarget = useReactiveObstacleAvoidance
-                ? ChooseObstacleRoute(
-                    origin, routeTarget, reactiveProbe,
-                    target, lookAhead, terrainClearance)
-                : target;
+            _plannedTarget = ChooseObstacleRoute(
+                origin, routeTarget, reactiveProbe,
+                target, lookAhead, terrainClearance);
             _lastRefreshTime = Time.time;
-            _nextRefreshTime = Time.time + _context.N("flight_modes.trailing_flight.avoidance.detection.refresh_interval");
+            _nextRefreshTime = Time.time + _context.N("obstacle_avoidance.refresh_interval");
             _initialized = true;
             return _plannedTarget;
         }
 
-        // Prioritizes the path the moving drone cannot instantly leave.
+        // Prioritizes the path the moving camera cannot instantly leave.
         private Vector3 GetReactiveProbe(
             Vector3 origin, Vector3 desiredProbe, Vector3 velocity,
             float lookAhead, out bool followsMomentum)
         {
             followsMomentum = false;
             if (velocity.sqrMagnitude <
-                _context.N("flight_modes.trailing_flight.avoidance.detection.momentum_speed_squared"))
+                _context.N("obstacle_avoidance.momentum_speed_squared"))
             {
                 return desiredProbe;
             }
@@ -111,9 +105,9 @@ namespace DronePilot
                 return desiredProbe;
             }
 
-            // A close obstacle needs faster steering than normal flight.
+            // A close obstacle needs faster steering than normal movement.
             EmergencyAvoidance = obstacleDistance <
-                _context.N("flight_modes.trailing_flight.avoidance.detection.emergency_distance");
+                _context.N("obstacle_avoidance.emergency_distance");
             followsMomentum = true;
             return momentumProbe;
         }
@@ -133,20 +127,19 @@ namespace DronePilot
                 return target;
             }
             EmergencyAvoidance |= obstacleDistance <
-                _context.N("flight_modes.trailing_flight.avoidance.detection.emergency_distance");
+                _context.N("obstacle_avoidance.emergency_distance");
             PrepareAvoidanceSide(obstacle);
 
             Vector3 direction = target - origin;
             direction.y = 0f;
-            if (direction.sqrMagnitude <
-                _context.N("numerical_tolerances.direction_squared"))
+            if (direction.sqrMagnitude < CameraConstants.DirectionSquared)
             {
                 return target;
             }
 
             Vector3 right = Vector3.Cross(Vector3.up, direction.normalized);
             string offsetsPath =
-                "flight_modes.trailing_flight.avoidance.detection.route_offsets";
+                "obstacle_avoidance.route_offsets";
             for (int index = 0; index < _context.Config.Count(offsetsPath); index++)
             {
                 Vector2 offset = new Vector2(
@@ -176,7 +169,7 @@ namespace DronePilot
             {
                 LogAvoidance(obstacle, "actor retreat");
                 Vector3 retreat = origin - direction.normalized *
-                                  _context.N("flight_modes.trailing_flight.avoidance.detection.actor_retreat_distance");
+                                  _context.N("obstacle_avoidance.actor_retreat_distance");
                 return RaiseForTerrain(
                     origin, retreat, lookAhead, terrainClearance);
             }
@@ -227,15 +220,14 @@ namespace DronePilot
             }
 
             _context.World.LogWarning?.Invoke(
-                $"Drone avoidance: obstacle={kind} '{name}', " +
+                $"Camera avoidance: obstacle={kind} '{name}', " +
                 $"maneuver={maneuver}.");
-            _context.Event?.Invoke("obstacle_avoidance", decision);
             _lastAvoidanceDecision = decision;
             _nextAvoidanceLogTime = Time.time +
-                _context.N("flight_modes.trailing_flight.avoidance.detection.avoidance_side_hold");
+                _context.N("obstacle_avoidance.avoidance_side_hold");
         }
 
-        // Logs when a previous avoidance ends and the orbit resumes directly.
+        // Logs when a previous avoidance ends and direct movement resumes.
         private void LogDirectPathRestored()
         {
             if (string.IsNullOrEmpty(_lastAvoidanceDecision) ||
@@ -245,10 +237,10 @@ namespace DronePilot
             }
 
             _context.World.LogInfo?.Invoke(
-                "Drone avoidance ended: direct trajectory restored.");
+                "Camera avoidance ended: direct trajectory restored.");
             _lastAvoidanceDecision = "direct";
             _avoidanceSideHoldUntil = Time.time +
-                _context.N("flight_modes.trailing_flight.avoidance.detection.avoidance_side_hold");
+                _context.N("obstacle_avoidance.avoidance_side_hold");
         }
 
         // Clears a completed avoidance only after a stable clear interval.
@@ -268,13 +260,13 @@ namespace DronePilot
         {
             Vector3 movement = target - origin;
             float distance = Mathf.Min(movement.magnitude, lookAhead);
-            if (distance < _context.N("numerical_tolerances.minimum_segment_length"))
+            if (distance < CameraConstants.MinimumSegmentLength)
             {
                 return false;
             }
 
             RaycastHit[] hits = Physics.SphereCastAll(
-                origin, _context.N("flight_modes.trailing_flight.avoidance.detection.camera_radius"), movement.normalized, distance,
+                origin, _context.N("obstacle_avoidance.camera_radius"), movement.normalized, distance,
                 Physics.AllLayers, QueryTriggerInteraction.Ignore);
             foreach (RaycastHit hit in hits)
             {
@@ -304,13 +296,13 @@ namespace DronePilot
             obstacleDistance = float.MaxValue;
             Vector3 movement = target - origin;
             float distance = Mathf.Min(movement.magnitude, lookAhead);
-            if (distance < _context.N("numerical_tolerances.minimum_segment_length"))
+            if (distance < CameraConstants.MinimumSegmentLength)
             {
                 return false;
             }
 
             RaycastHit[] hits = Physics.SphereCastAll(
-                origin, _context.N("flight_modes.trailing_flight.avoidance.detection.camera_radius"), movement.normalized, distance,
+                origin, _context.N("obstacle_avoidance.camera_radius"), movement.normalized, distance,
                 Physics.AllLayers, QueryTriggerInteraction.Ignore);
             foreach (RaycastHit hit in hits)
             {
@@ -323,32 +315,6 @@ namespace DronePilot
             }
 
             return obstacle != null;
-        }
-
-        // Checks a complete preplanned segment with the camera's full radius.
-        internal static bool IsRouteBlocked(
-            FlightContext context, Vector3 origin, Vector3 target)
-        {
-            Vector3 route = target - origin;
-            if (route.magnitude <
-                context.N("numerical_tolerances.minimum_segment_length"))
-            {
-                return false;
-            }
-            RaycastHit[] hits = Physics.SphereCastAll(
-                origin,
-                context.N("flight_modes.trailing_flight.avoidance.detection.camera_radius"),
-                route.normalized, route.magnitude,
-                Physics.AllLayers, QueryTriggerInteraction.Ignore);
-            foreach (RaycastHit hit in hits)
-            {
-                if (hit.collider != null &&
-                    context.World.IgnoreObstacle?.Invoke(hit.collider) != true)
-                {
-                    return true;
-                }
-            }
-            return false;
         }
 
         // Treats characters as obstacles and leaves terrain to height sampling.
@@ -375,15 +341,15 @@ namespace DronePilot
         {
             Vector3 route = target - origin;
             float distance = Mathf.Min(route.magnitude, lookAhead);
-            if (distance < _context.N("numerical_tolerances.minimum_segment_length"))
+            if (distance < CameraConstants.MinimumSegmentLength)
             {
                 return 0f;
             }
 
             float requiredLift = 0f;
-            for (int index = 1; index <= _context.N("flight_modes.trailing_flight.avoidance.terrain_following.samples"); index++)
+            for (int index = 1; index <= _context.N("terrain_following.samples"); index++)
             {
-                float amount = distance * index / _context.N("flight_modes.trailing_flight.avoidance.terrain_following.samples");
+                float amount = distance * index / _context.N("terrain_following.samples");
                 Vector3 point = origin + route.normalized * amount;
                 if (TryGroundHeight(point, out float ground))
                 {

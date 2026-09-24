@@ -1,10 +1,10 @@
 using System;
 using UnityEngine;
 
-namespace DronePilot
+namespace CameraOperator
 {
     // Provides game-independent terrain and collider classification callbacks.
-    public sealed class DroneWorld
+    public sealed class CameraWorld
     {
         public Func<Vector3, float?> GroundHeight { get; set; }
         public Func<Collider, bool> IgnoreObstacle { get; set; }

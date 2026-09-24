@@ -7,31 +7,23 @@ using System.Reflection;
 using System.Text.RegularExpressions;
 using YamlDotNet.RepresentationModel;
 
-namespace DronePilot
+namespace CameraOperator
 {
-    // Holds a validated, immutable snapshot of the drone's YAML settings.
+    // Holds a validated, immutable snapshot of the camera's YAML settings.
     public sealed class Configuration
     {
-        private readonly Dictionary<string, string> _values;
         private readonly Dictionary<string, int> _sequences;
         private readonly Dictionary<string, float> _numbers =
             new Dictionary<string, float>(StringComparer.Ordinal);
-        private readonly Dictionary<string, bool> _booleans =
-            new Dictionary<string, bool>(StringComparer.Ordinal);
 
         private Configuration(
             Dictionary<string, string> values,
             Dictionary<string, int> sequences)
         {
-            _values = values;
             _sequences = sequences;
             foreach (var pair in values)
             {
-                if (bool.TryParse(pair.Value, out bool boolean))
-                {
-                    _booleans.Add(pair.Key, boolean);
-                }
-                else if (float.TryParse(pair.Value, NumberStyles.Float,
+                if (float.TryParse(pair.Value, NumberStyles.Float,
                     CultureInfo.InvariantCulture, out float number) &&
                     !float.IsNaN(number) && !float.IsInfinity(number))
                 {
@@ -41,11 +33,11 @@ namespace DronePilot
         }
 
         // Loads the documented default template embedded in this assembly.
-        public static string DefaultYaml()
+        private static string DefaultYaml()
         {
             Assembly assembly = typeof(Configuration).Assembly;
             using (Stream stream = assembly.GetManifestResourceStream(
-                "DronePilot.config.yaml"))
+                "CameraOperator.config.yaml"))
             using (var reader = new StreamReader(stream))
             {
                 return reader.ReadToEnd();
@@ -53,7 +45,7 @@ namespace DronePilot
         }
 
         // Creates the documented default file only when it does not exist.
-        public static void CreateDefaultIfMissing(string path)
+        internal static void CreateDefaultIfMissing(string path)
         {
             string directory = Path.GetDirectoryName(Path.GetFullPath(path));
             Directory.CreateDirectory(directory);
@@ -69,7 +61,7 @@ namespace DronePilot
         }
 
         // Parses one complete YAML document and rejects missing or invalid keys.
-        public static Configuration Parse(string yaml)
+        internal static Configuration Parse(string yaml)
         {
             var values = new Dictionary<string, string>(StringComparer.Ordinal);
             var sequences = new Dictionary<string, int>(StringComparer.Ordinal);
@@ -84,25 +76,6 @@ namespace DronePilot
             return configuration;
         }
 
-        // Reads and validates an existing configuration file.
-        public static Configuration Load(string path)
-        {
-            return Parse(File.ReadAllText(path));
-        }
-
-        // Serializes current values to a complete YAML document.
-        public string ToYaml()
-        {
-            YamlMappingNode root = ParseRoot(DefaultYaml());
-            ApplyValues(root, "");
-            var stream = new YamlStream(new YamlDocument(root));
-            using (var writer = new StringWriter(CultureInfo.InvariantCulture))
-            {
-                stream.Save(writer, false);
-                return writer.ToString();
-            }
-        }
-
         // Reads a finite scalar setting by its dotted YAML path.
         public float Number(string path)
         {
@@ -111,42 +84,6 @@ namespace DronePilot
                 throw new FormatException($"Invalid numeric setting: {path}.");
             }
             return value;
-        }
-
-        // Reads an integer setting by its dotted YAML path.
-        public int Integer(string path)
-        {
-            float value = Number(path);
-            if (value != (int)value)
-            {
-                throw new FormatException($"Expected integer at {path}.");
-            }
-            return (int)value;
-        }
-
-        // Reads a boolean setting by its dotted YAML path.
-        public bool Enabled(string path)
-        {
-            if (!_booleans.TryGetValue(path, out bool value))
-            {
-                throw new FormatException($"Invalid boolean setting: {path}.");
-            }
-            return value;
-        }
-
-        // Reads one numeric sequence from YAML.
-        public float[] Numbers(string path)
-        {
-            if (!_sequences.TryGetValue(path, out int count))
-            {
-                throw new FormatException($"Missing sequence: {path}.");
-            }
-            var result = new float[count];
-            for (int index = 0; index < count; index++)
-            {
-                result[index] = Number($"{path}[{index}]");
-            }
-            return result;
         }
 
         // Returns the number of entries in one validated YAML sequence.
@@ -170,7 +107,7 @@ namespace DronePilot
             if (stream.Documents.Count != 1 ||
                 !(stream.Documents[0].RootNode is YamlMappingNode root))
             {
-                throw new FormatException("Drone YAML must have one mapping root.");
+                throw new FormatException("Camera Operator YAML must have one mapping root.");
             }
             return root;
         }
@@ -229,49 +166,40 @@ namespace DronePilot
                 {
                     throw new FormatException($"Missing setting: {pair.Key}.");
                 }
-                if (bool.TryParse(pair.Value, out _))
-                {
-                    candidate.Enabled(pair.Key);
-                }
-                else
-                {
-                    candidate.Number(pair.Key);
-                }
+                candidate.Number(pair.Key);
             }
             if (values.Count != defaults.Count ||
                 sequences.Count != defaultSequences.Count)
             {
-                throw new FormatException("Drone YAML contains unknown settings.");
+                throw new FormatException("Camera Operator YAML contains unknown settings.");
             }
         }
 
         // Checks relational constraints that basic scalar parsing cannot catch.
         private void ValidateRelationships()
         {
-            Less("flight_control.mode_switching.orbit_return_distance",
-                "flight_control.mode_switching.trailing_entry_distance");
-            Less("flight_modes.trailing_flight.distances.minimum",
-                "flight_modes.trailing_flight.distances.maximum");
-            Less("flight_modes.trailing_flight.distances.blend_start",
-                "flight_modes.trailing_flight.distances.blend_end");
-            Less("flight_modes.trailing_flight.planner.minimum_horizon",
-                "flight_modes.trailing_flight.planner.maximum_horizon");
-            Less("flight_modes.trailing_flight.altitude_limit_by_distance.near_distance",
-                "flight_modes.trailing_flight.altitude_limit_by_distance.far_distance");
-            Less("kinematics.limits.maximum_acceleration",
-                "kinematics.limits.emergency_acceleration");
-            Less("kinematics.limits.maximum_jerk",
-                "kinematics.limits.emergency_jerk");
-            Less("kinematics.vertical_speeds.catch_up_error_start",
-                "kinematics.vertical_speeds.catch_up_error_end");
-            foreach (var pair in _values)
+            ValidatePositioning();
+            Less("motion.limits.maximum_acceleration",
+                "motion.limits.emergency_acceleration");
+            Less("motion.limits.maximum_jerk",
+                "motion.limits.emergency_jerk");
+            Less("motion.vertical_movement.maximum_speed_error_start",
+                "motion.vertical_movement.maximum_speed_error_end");
+            foreach (var pair in _numbers)
             {
-                if (!pair.Key.EndsWith("enabled") &&
-                    Number(pair.Key) < 0f && !pair.Key.Contains("offset"))
+                if (pair.Value < 0f && !pair.Key.Contains("offset"))
                 {
                     throw new FormatException($"Negative setting: {pair.Key}.");
                 }
             }
+        }
+
+        // Validates the shared camera positioning distance and height bounds.
+        private void ValidatePositioning()
+        {
+            const string root = "positioning.";
+            Less(root + "minimum_distance", root + "maximum_distance");
+            Less(root + "minimum_height", root + "maximum_height");
         }
 
         // Enforces the min/max bounds documented beside template settings.
@@ -338,29 +266,5 @@ namespace DronePilot
             }
         }
 
-        // Replaces each template leaf with its current validated value.
-        private void ApplyValues(YamlNode node, string path)
-        {
-            if (node is YamlMappingNode map)
-            {
-                foreach (var pair in map.Children)
-                {
-                    string key = ((YamlScalarNode)pair.Key).Value;
-                    ApplyValues(pair.Value, path.Length == 0 ? key :
-                        path + "." + key);
-                }
-            }
-            else if (node is YamlSequenceNode sequence)
-            {
-                for (int index = 0; index < sequence.Children.Count; index++)
-                {
-                    ApplyValues(sequence.Children[index], $"{path}[{index}]");
-                }
-            }
-            else if (node is YamlScalarNode scalar)
-            {
-                scalar.Value = _values[path];
-            }
-        }
     }
 }

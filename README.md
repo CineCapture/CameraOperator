@@ -1,126 +1,95 @@
-# DronePilot
+# CameraOperator
 
-DronePilot flies a supplied Unity `Camera` around a target `GameObject` and
-keeps the target in view. The host owns both objects and provides terrain,
-obstacle, and actor information. DronePilot does not create the camera or
-record video.
+CameraOperator moves a Unity camera smoothly around a target.
 
-## Basic use
+It keeps the target in view, follows terrain, and avoids obstacles. The host
+application owns the camera and decides when to move it to a new position.
 
-Call `Update` on Unity's main thread after the target moves. Pass its current
-velocity and a positive maximum speed in meters per second. The last pilot
-profile is the fallback when no earlier condition matches.
+## What it does
+
+- After each `Reposition` call, follows the target from the requested world
+  direction and distance.
+- Aims at a configurable height on the target.
+- Smooths movement, acceleration, and braking.
+- Follows terrain and avoids obstacles.
+- Reloads valid `config.yaml` changes while running.
+
+## Host responsibilities
+
+The host application acts as the director. It is expected to:
+
+- create and own the camera;
+- decide whether to show this camera or the gameplay camera;
+- choose a starting position and call `Reposition` for each new view;
+- decide how long each view lasts and when to switch to another one;
+- start and stop video recording when needed.
+
+CameraOperator only moves and aims the camera between reposition requests.
+
+## Create an operator
 
 ```csharp
-using System.IO;
-using DronePilot;
+using CameraOperator;
 using UnityEngine;
 
-public sealed class DroneExample : MonoBehaviour
+CameraWorld world = new CameraWorld
 {
-    public Camera droneCamera;
-    public Camera gameplayCamera;
-    public GameObject target;
-    public LayerMask groundMask;
-    private DronePilotController _pilot;
-    private Vector3 _previousPosition;
+    GroundHeight = position => GetGroundHeight(position),
+    IgnoreObstacle = collider => collider.isTrigger,
+    IsActor = collider => collider.CompareTag("Player"),
+    LogInfo = Debug.Log,
+    LogWarning = Debug.LogWarning
+};
 
-    private void Start()
-    {
-        var world = new DroneWorld
-        {
-            GroundHeight = position => Physics.Raycast(
-                position + Vector3.up * 100f, Vector3.down,
-                out RaycastHit hit, 200f, groundMask)
-                    ? hit.point.y : (float?)null,
-            IgnoreObstacle = collider => collider.isTrigger,
-            IsActor = collider =>
-                collider.GetComponentInParent<CharacterController>() != null
-        };
-        var profiles = new[]
-        {
-            new PilotProfile("Open", 8f, 8f, position => true)
-        };
-        string configPath = Path.Combine(Application.persistentDataPath,
-            "DronePilot", "config.yaml");
-        _pilot = new DronePilotController(
-            droneCamera, target, configPath, world, profiles,
-            aimOffset: Vector3.up * 1.6f);
-        _previousPosition = target.transform.position;
-    }
+CameraProfile[] profiles =
+{
+    new CameraProfile("Forest", 4f, position => IsForest(position)),
+    new CameraProfile("Open area", 8f, position => true)
+};
 
-    private void LateUpdate()
-    {
-        Vector3 position = target.transform.position;
-        Vector3 velocity = (position - _previousPosition) /
-            Mathf.Max(Time.deltaTime, 0.0001f);
-        _previousPosition = position;
-        _pilot.Update(velocity, 7f); // Replace 7 with the target's maximum speed.
-    }
+CameraOperatorController cameraOperator = new CameraOperatorController(
+    camera, player, configPath, world, profiles);
+```
 
-    private void OnDestroy()
-    {
-        _pilot?.Dispose();
-    }
+The first matching profile is used. Keep a final profile that always matches as
+the fallback.
+
+## Update the camera
+
+Call `Update` after the target has moved:
+
+```csharp
+private void LateUpdate()
+{
+    cameraOperator.Update(playerVelocity, playerMaximumSpeed);
 }
 ```
 
-Use a ground-only layer for `groundMask`; the sample raycast is only an
-example terrain provider. The host decides which colliders are ignored or
-classified as actors. You can add earlier profiles with host-defined
-conditions, for example a dense-area profile before the unconditional `Open`
-profile.
+## Start from a new position
 
-## Optional visual and diagnostics
-
-The built-in drone model is embedded in `DronePilot.dll`. It can be shown to a
-viewer camera while remaining hidden from the piloted camera. To use it and
-telemetry, add `using DronePilot.Telemetry;` and replace the controller
-construction in `Start` with this fragment. `gameplayCamera` must differ from
-`droneCamera`:
+Use `Reposition` when another system chooses a new camera position:
 
 ```csharp
-var visual = new DroneVisualOptions
-{
-    ViewerCamera = gameplayCamera,
-    Visible = true,
-    Color = DroneShellColor.Metal
-};
-var telemetry = new Options
-{
-    Enabled = true,
-    RootDirectory = Path.Combine(Application.persistentDataPath, "DronePilot"),
-    SampleIntervalSeconds = 0.5f,
-    FlushIntervalSeconds = 60f,
-    OrbitDirectionThreshold = 0.05f
-};
-_pilot = new DronePilotController(
-    droneCamera, target, configPath, world, profiles,
-    telemetry: telemetry, droneVisual: visual);
-_pilot.SetVisual(true, DroneShellColor.Yellow);
+Vector3 newPosition = player.transform.position +
+    new Vector3(-5f, 3f, 0f);
+
+cameraOperator.Reposition(newPosition, playerVelocity);
 ```
 
-Telemetry writes JSON arrays under `<root>/Sessions/<session>/`. If you
-already have a visual `GameObject`, pass it through the separate `visual`
-parameter instead; DronePilot moves it but does not own it.
+CameraOperator then follows the target from this new direction and distance.
+
+## Clean up
+
+```csharp
+cameraOperator.Dispose();
+```
+
+CameraOperator does not destroy the camera or target.
 
 ## Configuration
 
-`config.yaml` is embedded in the DLL. A missing configuration file is created
-at the path supplied to the constructor with documented defaults. Existing
-files are validated and checked once per second. An invalid reload keeps the
-last valid settings.
+Pass the path to `config.yaml` when creating the operator. If the file is
+missing, CameraOperator creates it with default values.
 
-## Build
-
-Use .NET SDK 10 or a compatible MSBuild and provide the directory containing
-Unity's managed assemblies:
-
-```text
-dotnet build DronePilot.csproj -c Release -p:UnityManagedPath=<Unity-managed-directory>
-```
-
-The output contains `DronePilot.dll`, `YamlDotNet.dll`, and
-`Newtonsoft.Json.dll`. Unity assemblies come from the host game and must not
-be shipped with this library. The prebuilt model bundle in `assets/drone` is
-embedded in `DronePilot.dll` at build time.
+The file controls placement, aiming, movement, terrain following, obstacle
+avoidance, and recovery behavior.

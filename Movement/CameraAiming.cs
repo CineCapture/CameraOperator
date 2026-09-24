@@ -1,14 +1,14 @@
 using UnityEngine;
 
-namespace DronePilot
+namespace CameraOperator
 {
     // Keeps the player framed with a smooth level-horizon rotation.
-    internal sealed class DroneLook
+    internal sealed class CameraAiming
     {
-        private readonly FlightContext _context;
+        private readonly CameraContext _context;
 
-        // Binds the flight policy to one drone session.
-        internal DroneLook(FlightContext context)
+        // Binds the camera movement policy to one camera session.
+        internal CameraAiming(CameraContext context)
         {
             _context = context;
         }
@@ -29,10 +29,10 @@ namespace DronePilot
             Vector3 current = cameraTransform.eulerAngles;
             float pitch = Mathf.SmoothDampAngle(
                 current.x, ClampPitch(target.x), ref _pitchVelocity,
-                _context.N("aiming.look_smooth.rotation_smooth_time"), _context.N("aiming.look_smooth.maximum_rotation_speed"));
+                _context.N("aiming.rotation_smooth_time"), _context.N("aiming.maximum_rotation_speed"));
             float yaw = Mathf.SmoothDampAngle(
                 current.y, target.y, ref _yawVelocity,
-                _context.N("aiming.look_smooth.rotation_smooth_time"), _context.N("aiming.look_smooth.maximum_rotation_speed"));
+                _context.N("aiming.rotation_smooth_time"), _context.N("aiming.maximum_rotation_speed"));
             cameraTransform.rotation = Quaternion.Euler(pitch, yaw, 0f);
         }
 
@@ -40,8 +40,7 @@ namespace DronePilot
         private Vector3 GetLevelAngles(Vector3 position, Vector3 focus)
         {
             Vector3 direction = focus - position;
-            if (direction.sqrMagnitude <
-                _context.N("numerical_tolerances.direction_squared"))
+            if (direction.sqrMagnitude < CameraConstants.DirectionSquared)
             {
                 return Vector3.zero;
             }
@@ -56,7 +55,7 @@ namespace DronePilot
         {
             float signed = Mathf.DeltaAngle(0f, angle);
             return Mathf.Clamp(
-                signed, -_context.N("aiming.look_smooth.maximum_pitch_angle"), _context.N("aiming.look_smooth.maximum_pitch_angle"));
+                signed, -_context.N("aiming.maximum_pitch_angle"), _context.N("aiming.maximum_pitch_angle"));
         }
     }
 }

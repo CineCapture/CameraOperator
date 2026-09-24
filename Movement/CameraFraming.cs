@@ -1,14 +1,14 @@
 using UnityEngine;
 
-namespace DronePilot
+namespace CameraOperator
 {
     // Detects lost framing and produces a fast recovery position.
-    internal sealed class DroneFraming
+    internal sealed class CameraFraming
     {
-        private readonly FlightContext _context;
+        private readonly CameraContext _context;
 
-        // Binds the flight policy to one drone session.
-        internal DroneFraming(FlightContext context)
+        // Binds the camera movement policy to one camera session.
+        internal CameraFraming(CameraContext context)
         {
             _context = context;
         }
@@ -24,13 +24,12 @@ namespace DronePilot
 
         // Chooses a nearby position compatible with the pitch restriction.
         internal Vector3 GetRecoveryTarget(
-            Vector3 dronePosition)
+            Vector3 cameraPosition)
         {
             Vector3 targetPosition = _context.Target.transform.position;
-            Vector3 radial = dronePosition - targetPosition;
+            Vector3 radial = cameraPosition - targetPosition;
             radial.y = 0f;
-            if (radial.sqrMagnitude <
-                _context.N("numerical_tolerances.direction_squared"))
+            if (radial.sqrMagnitude < CameraConstants.DirectionSquared)
             {
                 radial = -_context.Target.transform.forward;
                 radial.y = 0f;
@@ -38,14 +37,14 @@ namespace DronePilot
 
             radial.Normalize();
             float height = Mathf.Max(0f,
-                dronePosition.y - targetPosition.y);
+                cameraPosition.y - targetPosition.y);
             float distanceForHeight = height /
-                Mathf.Tan(_context.N("framing.recovery.comfortable_pitch") * Mathf.Deg2Rad);
+                Mathf.Tan(_context.N("recovery.comfortable_pitch") * Mathf.Deg2Rad);
             float recoveryDistance = Mathf.Max(
-                _context.N("framing.recovery.distance"), distanceForHeight);
+                _context.N("recovery.distance"), distanceForHeight);
             Vector3 target = targetPosition +
                              radial * recoveryDistance;
-            target.y = GetGroundHeight(target) + _context.N("framing.recovery.height");
+            target.y = GetGroundHeight(target) + _context.N("recovery.height");
             return target;
         }
 
