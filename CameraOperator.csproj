@@ -5,6 +5,9 @@
     <AssemblyName>CameraOperator</AssemblyName>
     <RootNamespace>CameraOperator</RootNamespace>
     <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+    <GenerateAssemblyVersionAttribute>false</GenerateAssemblyVersionAttribute>
+    <GenerateAssemblyFileVersionAttribute>false</GenerateAssemblyFileVersionAttribute>
+    <Deterministic>false</Deterministic>
     <Nullable>disable</Nullable>
   </PropertyGroup>
   <ItemGroup>
